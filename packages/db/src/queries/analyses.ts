@@ -241,3 +241,47 @@ export function countAnalyses(db: Db): number {
 export function clearAnalyses(db: Db): void {
   db.delete(analyses).run();
 }
+
+/**
+ * The latest successful analysis for an event, if there is one.
+ *
+ * The strategy layer previously hard-coded `stillUnknown: []` and `doNotSay: []`
+ * because no analysis existed. Now that the live path produces them, two of the seven
+ * DON'T POST reasons — `insufficient_information` and `reputational_risk` — can
+ * actually fire, and the decision panel can show real traps rather than an empty list.
+ */
+export function latestAnalysisFor(
+  db: Db,
+  eventId: number,
+):
+  | {
+      stillUnknown: string[];
+      doNotSay: string[];
+      confidence: string | null;
+      injectionObserved: boolean;
+    }
+  | undefined {
+  const row = db
+    .select({
+      payload: analyses.payload,
+      confidence: analyses.confidence,
+      injectionObserved: analyses.injectionObserved,
+    })
+    .from(analyses)
+    .where(
+      and(eq(analyses.eventId, eventId), eq(analyses.stage, 'analysis'), eq(analyses.status, 'ok')),
+    )
+    .orderBy(desc(analyses.id))
+    .limit(1)
+    .get();
+
+  if (row === undefined) return undefined;
+
+  const payload = row.payload as { stillUnknown?: string[]; doNotSay?: string[] } | null;
+  return {
+    stillUnknown: payload?.stillUnknown ?? [],
+    doNotSay: payload?.doNotSay ?? [],
+    confidence: row.confidence,
+    injectionObserved: row.injectionObserved,
+  };
+}

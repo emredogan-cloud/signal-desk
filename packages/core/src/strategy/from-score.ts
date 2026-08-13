@@ -37,10 +37,18 @@ export type RowEvidence = {
   readonly sourceCategory: string;
 };
 
+/** What a Phase 6 analysis contributes, when one exists. */
+export type AnalysisContext = {
+  readonly stillUnknown: readonly string[];
+  readonly doNotSay: readonly string[];
+  readonly injectionObserved: boolean;
+};
+
 export function strategyFromScore(
   row: ScoredRow,
   evidence: readonly RowEvidence[],
   now: Date,
+  analysis?: AnalysisContext,
 ): Strategy {
   const breakdown = row.breakdown as {
     brandRelevance?: { name: string; value: number }[];
@@ -65,16 +73,17 @@ export function strategyFromScore(
     expertSourceCount: new Set(
       evidence.filter((item) => item.sourceCategory === 'EXPERT_ANALYST').map((i) => i.sourceId),
     ).size,
-    // These come from a Phase 6 analysis. Empty is honest when none exists — filling
-    // them with plausible defaults would put invented gaps in front of the operator.
-    stillUnknown: [],
+    // From the Phase 6 analysis when one exists. Empty is honest when none does —
+    // filling them with plausible defaults would put invented gaps in front of the
+    // operator, which is exactly the fabrication this project forbids.
+    stillUnknown: analysis?.stillUnknown ?? [],
     whatChanged: '',
     importance: row.importance,
     brandRelevance: row.brandRelevance,
     combined: row.combined,
     confidence: row.confidence,
     hoursSinceEvent: Math.max(0, (now.getTime() - row.eventOccurredAt.getTime()) / 3_600_000),
-    doNotSay: [],
-    injectionFlagged: false,
+    doNotSay: analysis?.doNotSay ?? [],
+    injectionFlagged: analysis?.injectionObserved ?? false,
   });
 }

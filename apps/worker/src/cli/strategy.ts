@@ -6,6 +6,7 @@ import {
   latestScores,
   envelopeItemsFor,
   loadEntityRegistryRows,
+  latestAnalysisFor,
 } from '@signal-desk/db';
 import { strategyFromScore, summariseStrategies, type Strategy } from '@signal-desk/core';
 import { ConfigError } from '@signal-desk/shared';
@@ -61,7 +62,12 @@ function main(): number {
     }
 
     const strategies: Strategy[] = rows.map((row) =>
-      strategyFromScore(row, envelopeItemsFor(handle.db, row.eventId), now),
+      strategyFromScore(
+        row,
+        envelopeItemsFor(handle.db, row.eventId),
+        now,
+        latestAnalysisFor(handle.db, row.eventId),
+      ),
     );
 
     const stats = summariseStrategies(strategies);

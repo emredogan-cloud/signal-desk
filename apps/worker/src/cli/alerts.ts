@@ -7,6 +7,7 @@ import {
   sourceHealthRows,
   listSources,
   envelopeItemsFor,
+  latestAnalysisFor,
 } from '@signal-desk/db';
 import {
   freshnessAlerts,
@@ -74,7 +75,12 @@ async function main(): Promise<number> {
         // An earlier version hard-coded 'POST_SOON' here, which meant the event alert
         // path could never fire — a second derivation of the same judgement that had
         // silently drifted from the real one.
-        const strategy = strategyFromScore(row, envelopeItemsFor(handle.db, row.eventId), now);
+        const strategy = strategyFromScore(
+          row,
+          envelopeItemsFor(handle.db, row.eventId),
+          now,
+          latestAnalysisFor(handle.db, row.eventId),
+        );
         return eventAlert({
           eventId: row.eventId,
           title: row.title,
