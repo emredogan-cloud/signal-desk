@@ -1147,7 +1147,18 @@ the limitation is in the output rather than only in the documentation.
 
 ---
 
-## ☐ Phase 10 — Dashboard command centre
+## ◐ Phase 10 — Dashboard command centre
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-10-complete`. 932 tests, CI green.
+>
+> Rendered and checked against a running server: 50KB of HTML, all panels present,
+> CSP verified on the wire. The top event's decision is above the fold on first
+> render — the 60-second path is a layout property, not a click sequence.
+>
+> **`PENDING-OPERATOR`:** the under-60-seconds claim, the one-screen morning brief on
+> his laptop, and the exit criterion of a week's daily use.
+> **`PENDING-DATA`:** the remote-deployment decision, which the roadmap requires be
+> made _with_ a month of machine-off-hours miss data that does not exist yet.
 
 **OBJECTIVE** The interface that makes the whole system usable in the 15 minutes the operator has.
 
@@ -1191,6 +1202,53 @@ rendering hostile titles and summaries from the injection corpus.
 **EXIT CRITERIA** Above + one week of the operator actually using it daily as his primary surface.
 
 **ROLLBACK** UI only.
+
+### Phase 10 outcome — 2026-08-13
+
+| Acceptance criterion                                              | Result                                                                                                                                                                     |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard → decided action in under 60 seconds for the top event  | ◐ the decision, its reasoning, and all four panel fields render above the fold with no interaction; the **timing** is `PENDING-OPERATOR`                                   |
+| Morning brief renders in one screen without scrolling             | ⏳ **PENDING-OPERATOR** — brief mode caps at 5 events for this reason                                                                                                      |
+| Health panel makes a dead source obvious without being looked for | ✅ dead-source count is a red banner in the panel heading, and the panel sits directly under the decision rather than at the bottom                                        |
+| Hostile content from the injection corpus renders inert           | ✅ all 39 documents rendered through the real components; no `<script>`, no event handlers, no `javascript:` survives                                                      |
+| MOCK badge cannot be missed                                       | ✅ full-width, fixed, names each mocked subsystem individually, and states plainly that nothing on screen is live                                                          |
+| Remote-deployment decision made with data                         | ⏳ **PENDING-DATA** — the criterion requires a month of miss data attributable to machine-off hours. Deciding without it would be exactly the guess the criterion forbids. |
+
+**Verified on the wire, not asserted.** The CSP was checked against a running server:
+`default-src 'none'` with no `unsafe-inline` and no `unsafe-eval`, plus `nosniff`,
+`no-referrer`, and `DENY` framing. Every component is a server component, so Next's
+runtime is served from `'self'` and nothing inline is emitted — which is what makes
+omitting a nonce pipeline honest rather than lucky.
+
+**Three real defects the first render exposed.**
+
+1. **The dashboard was migrating the schema on page load.** A browser refresh could
+   alter the schema while the worker was mid-write. It is a reader; the worker owns
+   migrations. Removing the call was right on the merits and _also_ fixed the build —
+   the reverse order would have been a workaround.
+2. **`MIGRATIONS_FOLDER` failed the Turbopack build.** `new URL('../migrations',
+import.meta.url)` reads to a bundler as a **static asset reference**, so it tried
+   to resolve a directory of `.sql` files as a module. `path.join` produces the same
+   string and says unambiguously that it is a path.
+3. **A missing schema produced a raw `SqliteError` and a Next error page.** A reader
+   that depends on a writer having run has to say so; it now names the commands to
+   run instead.
+
+**One claim corrected.** A comment said "no client JavaScript is shipped". Next ships
+its own runtime regardless — the served page carries eight script tags. The accurate
+claim is narrower: none of the shipped script is ours, and none of it is inline.
+
+**Known gaps carried forward.**
+
+1. Event detail is rendered inline in the stream row rather than on a dedicated route.
+   Every field the roadmap lists that _exists_ is shown; the ones that do not exist
+   yet (before/after, implications, still-unknown) come from Phase 6 analyses, and no
+   event has one.
+2. No accessibility audit tool has been run. Semantics are correct by construction —
+   landmarks, `scope` on headers, `role="alert"` on the dead-source banner, `aria-current`
+   on the mode nav — but that is not the same as a measured pass.
+3. `DO NOT SAY` renders only when a Phase 6 analysis supplies it, so it is currently
+   never shown on real data.
 
 ---
 

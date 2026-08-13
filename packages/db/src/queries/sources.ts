@@ -146,3 +146,28 @@ export function countSourcesByPriority(db: Db): Record<number, number> {
 
   return Object.fromEntries(rows.map((r) => [r.priority, r.n]));
 }
+
+/**
+ * Source freshness, for the dashboard health panel.
+ *
+ * `ROADMAP.md` Phase 10 acceptance: "Health panel makes a dead source obvious
+ * **without being looked for**." So this returns every enabled source including the
+ * ones that have never succeeded — a source missing from the list because it never
+ * worked is exactly the failure that goes unnoticed.
+ */
+export function sourceHealthRows(db: Db): {
+  id: string;
+  lastSuccessAt: Date | null;
+  consecutiveFailures: number;
+}[] {
+  return db
+    .select({
+      id: sources.id,
+      lastSuccessAt: sources.lastSuccessAt,
+      consecutiveFailures: sources.consecutiveFailures,
+    })
+    .from(sources)
+    .where(eq(sources.active, true))
+    .orderBy(sources.id)
+    .all();
+}

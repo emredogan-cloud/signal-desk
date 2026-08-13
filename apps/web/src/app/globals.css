@@ -98,3 +98,276 @@ code {
 .status dd {
   margin: 0 0 0.25rem 11rem;
 }
+
+/* ── Phase 10 dashboard.
+   Dark, dense, and monospaced. The operator has fifteen minutes and is reading
+   numbers next to sentences, so the priority is scanability over polish. */
+
+.modes {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #2a2a2a;
+  margin-bottom: 1.5rem;
+}
+.modes a {
+  padding: 0.6rem 1.2rem;
+  color: #888;
+  text-decoration: none;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  border-bottom: 2px solid transparent;
+}
+.modes a[aria-current='page'] {
+  color: #fff;
+  border-bottom-color: #4a9eff;
+}
+
+.decision {
+  border: 1px solid #2a2a2a;
+  border-left: 3px solid #4a9eff;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.decision h1 {
+  font-size: 1.15rem;
+  line-height: 1.5;
+  margin: 0 0 0.75rem;
+  font-weight: 500;
+}
+.reasoning {
+  color: #bbb;
+  margin: 0 0 1rem;
+}
+
+.action {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  border-radius: 2px;
+}
+.action-post_now {
+  background: #1a4d2e;
+  color: #6ee7a0;
+}
+.action-post_soon {
+  background: #2a3d5a;
+  color: #7ab8ff;
+}
+.action-wait {
+  background: #4d3d1a;
+  color: #ffd48a;
+}
+.action-verify {
+  background: #4d2a1a;
+  color: #ffa07a;
+}
+.action-dont_post {
+  background: #333;
+  color: #999;
+}
+
+.panel {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  margin: 1rem 0;
+}
+.panel dt {
+  color: #666;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.panel dd {
+  margin: 0;
+  color: #ddd;
+}
+
+.do-not-say {
+  border: 1px solid #4d2a2a;
+  background: #1a0f0f;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+}
+.do-not-say h2 {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: #ff8a8a;
+  margin: 0 0 0.5rem;
+}
+.do-not-say ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+details {
+  margin-top: 1rem;
+}
+summary {
+  cursor: pointer;
+  color: #888;
+  font-size: 0.8rem;
+  padding: 0.3rem 0;
+}
+summary:hover {
+  color: #ccc;
+}
+
+.options {
+  list-style: none;
+  padding: 0;
+}
+.options li {
+  border-left: 2px solid #333;
+  padding-left: 0.75rem;
+  margin: 0.75rem 0;
+}
+.fit {
+  color: #666;
+  font-size: 0.75rem;
+}
+
+.health {
+  border: 1px solid #2a2a2a;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.health-alarm {
+  border-color: #6d2a2a;
+  background: #150c0c;
+}
+.health h2,
+.stream h2,
+.suspicious h2,
+.trends h2,
+.eod h2 {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: #666;
+  margin: 0 0 0.75rem;
+}
+.alarm {
+  color: #ff6b6b;
+  margin-left: 0.75rem;
+  font-weight: 600;
+}
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 0;
+}
+.metrics > div {
+  min-width: 8rem;
+}
+.metrics dt {
+  color: #666;
+  font-size: 0.7rem;
+}
+.metrics dd {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  color: #fff;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+th {
+  text-align: left;
+  color: #666;
+  font-weight: 400;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #2a2a2a;
+  padding: 0.4rem 0.6rem 0.4rem 0;
+}
+td {
+  padding: 0.35rem 0.6rem 0.35rem 0;
+  border-bottom: 1px solid #1a1a1a;
+  vertical-align: top;
+}
+td.num,
+th.num {
+  text-align: right;
+}
+tr.dead td {
+  color: #ff6b6b;
+}
+
+.suspicious {
+  border: 1px solid #6d5a2a;
+  background: #14110a;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.suspicious ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.stream,
+.trends,
+.eod {
+  border: 1px solid #2a2a2a;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.trends ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.trends li {
+  border-left: 2px solid #333;
+  padding-left: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.stage {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+  background: #333;
+  color: #aaa;
+}
+.stage-emerging {
+  background: #1a4d2e;
+  color: #6ee7a0;
+}
+.stage-accelerating {
+  background: #2a3d5a;
+  color: #7ab8ff;
+}
+.stage-saturated,
+.stage-declining {
+  background: #3a3a3a;
+  color: #888;
+}
+
+.muted {
+  color: #777;
+  font-size: 0.8rem;
+}
+.host {
+  color: #666;
+  font-size: 0.75rem;
+}
+.unsafe-link {
+  color: #ff8a8a;
+}
+.caps {
+  border-left: 2px solid #6d5a2a;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+}
+.empty {
+  border: 1px solid #2a2a2a;
+  padding: 2rem;
+  text-align: center;
+  color: #888;
+}

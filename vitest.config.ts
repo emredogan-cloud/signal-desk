@@ -23,12 +23,14 @@ export default defineConfig({
     // runner — which is a bad place for the margin to be, because the failure looks
     // like flakiness rather than the timing signal it is.
     testTimeout: 20_000,
-    include: ['packages/**/*.test.ts', 'apps/worker/**/*.test.ts'],
+    // .tsx included from Phase 10: the dashboard's XSS test renders hostile corpus
+    // content through the real components, which needs JSX.
+    include: ['packages/**/*.test.ts', 'apps/worker/**/*.test.ts', 'apps/web/**/*.test.tsx'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['packages/*/src/**/*.ts', 'apps/worker/src/**/*.ts'],
+      include: ['packages/*/src/**/*.ts', 'apps/worker/src/**/*.ts', 'apps/web/src/**/*.tsx'],
       exclude: ['**/*.test.ts', '**/index.ts', '**/types.ts'],
     },
   },

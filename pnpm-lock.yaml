@@ -52,6 +52,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@signal-desk/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@signal-desk/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -67,6 +70,9 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
     devDependencies:
       '@types/react':
         specifier: ^19.2.18
@@ -1931,6 +1937,9 @@ packages:
     resolution: {integrity: sha512-8I8TjW5KMOKsZQTvoxjuSIa7foAwPWGOts+6o7sgjz41/qMD9VQHEDxi6PBvK2l0MXUmqZyNpUK+T2tQaaElvw==}
     engines: {node: '>=10'}
 
+  server-only@0.0.1:
+    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
+
   sharp@0.35.3:
     resolution: {integrity: sha512-ej0zVHuZGHCiABXcNxeYhpRnPNPAcvbG8RMdBAhDAxLKkCRVSpK3Iyu7qbqw3JMzoj0REeM6f3tJLtVwl0023Q==}
     engines: {node: '>=20.9.0'}
@@ -3586,6 +3595,8 @@ snapshots:
   serialize-error@7.0.1:
     dependencies:
       type-fest: 0.13.1
+
+  server-only@0.0.1: {}
 
   sharp@0.35.3(@types/node@22.20.1):
     dependencies:
