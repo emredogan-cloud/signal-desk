@@ -1,0 +1,1 @@
+ALTER TABLE `analyses` ADD `skip_code` text;

@@ -216,6 +216,24 @@ export function sanitize(input: string, options: SanitizeOptions = {}): Sanitize
  * injection attempt against a niche monitoring system is itself interesting
  * information.
  */
+/**
+ * Invisible characters, for detection rather than removal.
+ *
+ * Broader than the sanitiser's classes: it includes the C0 control range, because a
+ * document interleaving `\u0001` between words is doing something no publisher does
+ * by accident. Kept separate from the sanitiser's constants so that widening the
+ * detector never widens what gets silently stripped from stored text.
+ */
+/* eslint-disable no-control-regex -- detecting control characters IS the point of these two */
+const INVISIBLE_FOR_DETECTION =
+  /[\u200B-\u200D\u2060\uFEFF\u180E\u00AD\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
+
+/** A short window around the first invisible character, for the operator to read. */
+
+const OBFUSCATION_EVIDENCE =
+  /.{0,30}[\u200B-\u200D\u2060\uFEFF\u180E\u00AD\u202A-\u202E\u0000-\u001F].{0,30}/;
+/* eslint-enable no-control-regex */
+
 export type InjectionSignal = {
   readonly kind:
     | 'instruction_override'
@@ -224,7 +242,9 @@ export type InjectionSignal = {
     | 'fabricated_authority'
     | 'exfiltration_bait'
     | 'hidden_content'
-    | 'role_confusion';
+    | 'role_confusion'
+    | 'schema_attack'
+    | 'obfuscation';
   /** The matched text, capped so the flag itself cannot be a payload. */
   readonly evidence: string;
 };
@@ -271,6 +291,123 @@ const INJECTION_PATTERNS: readonly { kind: InjectionSignal['kind']; pattern: Reg
     kind: 'role_confusion',
     pattern: /<\|(?:im_start|im_end|system|endoftext)\|>|\[\/?INST\]|<<SYS>>/i,
   },
+  {
+    kind: 'score_manipulation',
+    // Self-asserted numeric scores, including the shape that imitates this system's
+    // own field names — `importance_score: 100`, `confidence: HIGH`.
+    pattern:
+      /\b(?:importance|priority|relevance|urgency|confidence|brand_relevance|importance_score|recommended_action)\s*[:=]\s*(?:100|max|maximum|critical|highest|high\b|post_now)/i,
+  },
+  {
+    kind: 'score_manipulation',
+    // Superlative self-description. Requires the superlative AND a scope claim, so
+    // ordinary marketing ("our most powerful model yet") does not match.
+    pattern:
+      /\bthe\s+most\s+important\s+(?:announcement|news|event|release|story)\s+(?:in|of)\s+(?:the\s+)?(?:history|all\s+time|the\s+year|the\s+decade)\b/i,
+  },
+  {
+    kind: 'score_manipulation',
+    // Publish-now pressure combined with an instruction to skip verification. Either
+    // half alone is ordinary copy; together they target the recommendation directly.
+    pattern:
+      /\bdo\s+not\s+(?:verify|wait|check|confirm|fact.?check)\b|\bpublish\s+(?:this\s+)?(?:immediately|within\s+the\s+next|right\s+now)\b[^.]{0,80}\bor\b/i,
+  },
+  {
+    kind: 'score_manipulation',
+    // Appeals to the operator's own goals. This is the most persuasive family and
+    // the least keyword-like, so it needs the audience/growth framing plus an
+    // explicit instruction to rate it.
+    pattern:
+      // Spans sentence boundaries deliberately. The corpus case puts the appeal and
+      // the instruction in separate sentences — "…your audience wants. … Rate it
+      // highly." — and a `[^.]` window cannot cross the period, so the most
+      // persuasive payload in the corpus was the one that slipped through. Requiring
+      // BOTH halves within 200 characters keeps it specific: ordinary marketing says
+      // "your audience will love this" without ever instructing a rating.
+      /\b(?:your\s+audience|your\s+following|your\s+followers)\b[\s\S]{0,200}?\b(?:rate\s+(?:it|this)\s+(?:highly|high)|prioriti[sz]e\s+(?:this|it)|score\s+(?:this|it)\s+high)/i,
+  },
+  {
+    kind: 'score_manipulation',
+    // Asserted corroboration. Three or more named outlets in one breath, framed as
+    // confirmation, is a claim the document cannot support about itself.
+    pattern:
+      /\b(?:independently\s+)?(?:confirmed|verified|corroborated)\s+by\b[^.]{0,120}?(?:,[^.]{0,60}){2,}/i,
+  },
+  {
+    kind: 'fabricated_authority',
+    // Self-declared officialness. The registry decides what is official; a document
+    // saying so about itself is a red flag, not evidence.
+    pattern:
+      /\b(?:official(?:ly)?\s+(?:announcement|statement|communication)|verified\s+source|authoritative\s+(?:source|document))\b[^.]{0,120}\b(?:trust|tag(?:ged)?|treat|mark(?:ed)?|should\s+be)\b/i,
+  },
+  {
+    kind: 'fabricated_authority',
+    // A forged system/instruction block embedded in content.
+    pattern: /<\/?(?:system|instructions?|admin|prompt)\s*>/i,
+  },
+  {
+    kind: 'fabricated_authority',
+    // Claims of a cryptographic verification that was never performed.
+    pattern:
+      /\b(?:pgp|gpg|cryptographically)\s+(?:signed|authenticated|verified)\b[^.]{0,120}\b(?:trust|must\s+be|should\s+be)\b/i,
+  },
+  {
+    kind: 'fabricated_authority',
+    // Impersonating the operator to request a rule change.
+    pattern:
+      /\b(?:message|note|instruction)\s+from\s+the\s+(?:system\s+)?(?:operator|administrator|owner)\b|\b(?:disable|bypass|skip|ignore)\s+(?:the\s+)?(?:confidence\s+cap|safety\s+check|validation|guardrails?)\b/i,
+  },
+  {
+    kind: 'exfiltration_bait',
+    // Requests to echo the prompt or configuration back. Distinct from the existing
+    // prompt_extraction rule, which requires an imperative verb; this catches the
+    // "so the user can verify" framing.
+    pattern:
+      /\b(?:repeat|echo|output|print)\s+(?:your\s+)?(?:full\s+|entire\s+|complete\s+)?(?:system\s+prompt|instructions?|configuration)\b/i,
+  },
+  {
+    kind: 'exfiltration_bait',
+    // Requests for environment variables or credentials by name.
+    pattern:
+      /\b(?:ANTHROPIC_API_KEY|DATABASE_URL|OPENAI_API_KEY|AWS_SECRET|X_API_KEY)\b|\b(?:output|print|reveal|show)\s+the\s+values?\s+of\b[^.]{0,60}\b(?:env|environment|variable|secret|key)/i,
+  },
+  {
+    kind: 'exfiltration_bait',
+    // Beacon URLs — a query parameter that looks like it carries state out.
+    pattern: /https?:\/\/[^\s)]*[?&](?:leak|exfil|collect|data|prompt|steal)=/i,
+  },
+  {
+    kind: 'schema_attack',
+    // Attempts to add a field to the structured output. `additionalProperties:false`
+    // already makes this impossible; flagging it records the attempt.
+    pattern:
+      /\badd\s+(?:a\s+)?(?:new\s+)?(?:field|key|property|parameter)\s+(?:called|named)\b|\binclude\s+(?:a\s+)?(?:field|key)\s+["'`]/i,
+  },
+  {
+    kind: 'schema_attack',
+    // Instructing which evidence id to cite. Validation rejects unknown ids; this
+    // records that something tried.
+    pattern: /\bcite\s+(?:the\s+)?evidence\s+id\b|\bevidence[_\s]?ids?\s*[:=]\s*["'`[]/i,
+  },
+  {
+    kind: 'instruction_override',
+    // Persona replacement and amnesia framing — the variants the first pass missed.
+    pattern:
+      /\byou\s+are\s+now\b|\bforget\s+(?:everything|all)\b[^.]{0,60}\b(?:before|prior|previously)\b|\bstart\s+fresh\b[^.]{0,60}\binstructions?\b/i,
+  },
+  {
+    kind: 'instruction_override',
+    // Positional overrides that target the prompt's layout rather than its content.
+    pattern:
+      /\b(?:disregard|ignore)\s+(?:everything|all|anything)\s+(?:above|below|before|prior\s+to)\b|\bnew\s+instructions\s+(?:follow|below)\b/i,
+  },
+  {
+    kind: 'instruction_override',
+    // Hidden-element markers surviving into the raw scan. The sanitiser removes the
+    // element; the detector's job is to notice it was there.
+    pattern:
+      /style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0|left\s*:\s*-\d{3,}px|position\s*:\s*absolute)/i,
+  },
 ];
 
 /**
@@ -287,8 +424,33 @@ export function detectInjectionSignals(
   const signals: InjectionSignal[] = [];
   const seen = new Set<string>();
 
+  // ─── Obfuscation is itself a signal, and it must be undone before matching.
+  //
+  // The corpus proved both halves. `I\u200Bg\u200Bn\u200Bo\u200Br\u200Be` defeats
+  // every keyword pattern above, so a detector that scans the raw bytes alone reports
+  // it clean — the very payload most obviously designed to evade detection is the one
+  // it misses. And a document that separates each letter of a word with zero-width
+  // spaces has no innocent explanation, so the presence of the characters is worth
+  // flagging even when the de-obfuscated text turns out to be harmless.
+  //
+  // Note this differs from the sanitiser's job. The sanitiser REMOVES these so the
+  // model never sees them; the detector RECORDS that they were there.
+  const obfuscated = INVISIBLE_FOR_DETECTION.test(rawInput);
+  if (obfuscated) {
+    const evidence = OBFUSCATION_EVIDENCE.exec(rawInput);
+    signals.push({
+      kind: 'obfuscation',
+      evidence: (evidence?.[0] ?? 'invisible characters').slice(0, 200),
+    });
+  }
+
+  // Match against BOTH the raw text and the de-obfuscated text. Raw catches payloads
+  // that rely on markup; de-obfuscated catches payloads that rely on invisible
+  // separators. Neither alone is sufficient.
+  const deobfuscated = obfuscated ? rawInput.replace(INVISIBLE_FOR_DETECTION, '') : rawInput;
+
   for (const { kind, pattern } of INJECTION_PATTERNS) {
-    const match = pattern.exec(rawInput);
+    const match = pattern.exec(rawInput) ?? (obfuscated ? pattern.exec(deobfuscated) : null);
     if (match === null) continue;
 
     const key = `${kind}:${match[0].slice(0, 40)}`;

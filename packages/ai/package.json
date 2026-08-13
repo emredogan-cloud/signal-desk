@@ -13,6 +13,8 @@
     }
   },
   "dependencies": {
-    "@signal-desk/shared": "workspace:*"
+    "@anthropic-ai/sdk": "^0.72.1",
+    "@signal-desk/shared": "workspace:*",
+    "zod": "^4.1.13"
   }
 }

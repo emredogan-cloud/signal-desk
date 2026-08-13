@@ -36,6 +36,20 @@
       "when": 1786639924384,
       "tag": "0004_phase5_scores",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786641772891,
+      "tag": "0005_phase6_analyses",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1786642050372,
+      "tag": "0006_phase6_skip_code",
+      "breakpoints": true
     }
   ]
 }

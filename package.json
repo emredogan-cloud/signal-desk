@@ -34,7 +34,8 @@
     "embeddings:warm": "tsx --conditions=development apps/worker/src/cli/warm-embeddings.ts",
     "labelled:build": "tsx --conditions=development apps/worker/src/cli/build-labelled-set.ts",
     "measure:dedup": "tsx --conditions=development apps/worker/src/cli/measure-dedup.ts",
-    "score": "tsx --conditions=development apps/worker/src/cli/score.ts"
+    "score": "tsx --conditions=development apps/worker/src/cli/score.ts",
+    "analyze": "tsx --conditions=development apps/worker/src/cli/analyze.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -54,5 +55,8 @@
       "adm-zip": ">=0.6.0",
       "sharp": ">=0.35.0"
     }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1"
   }
 }

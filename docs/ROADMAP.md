@@ -723,7 +723,21 @@ nothing is old. Quoting only 98.7% would be technically true and misleading.
 
 ---
 
-## ☐ Phase 6 — AI analysis engine
+## ◐ Phase 6 — AI analysis engine
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-6-complete`. 708 tests, CI green.
+>
+> **Three acceptance criteria are `PENDING-CREDENTIALS`** and honestly cannot be met
+> without `ANTHROPIC_API_KEY`: schema conformance over ≥100 real events, a verified
+> prompt-cache hit, and the measured daily cost that replaces the `ARCHITECTURE.md` §6
+> estimate. All three require live calls. The code measures and reports each of them;
+> none is asserted.
+>
+> **Met and measured without credentials:** the full 39-document injection corpus
+> (§5 test 1), provenance validation (§5 test 6), the rumour cap on output (§5 test 7),
+> budget-guard degradation (§5 test 5), and `AI_MODE=MOCK` determinism.
+>
+> **Outstanding human gate:** "Operator reads 20 analyses and judges them non-obvious."
 
 **OBJECTIVE** Turn a scored event into structured analysis: what happened, what changed, before/after,
 implications by audience, what is still unknown, confidence, and the do-not-say list.
@@ -766,6 +780,72 @@ validation rejecting an unsourced number. Cache-hit assertion. MOCK determinism.
 the press release, the prompts are wrong and the phase is not done.
 
 **ROLLBACK** Analyses are versioned rows; revert the prompt version and re-run.
+
+### Phase 6 outcome — 2026-08-13
+
+| Acceptance criterion                                                                   | Result                                                                                       |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Analyses conform to schema 100% of the time across ≥100 real events                    | ⏳ **PENDING-CREDENTIALS** — needs live calls                                                |
+| Prompt cache demonstrably hits (`cache_read_input_tokens > 0`)                         | ⏳ **PENDING-CREDENTIALS** — `pnpm analyze` measures and reports it; never asserted          |
+| No injection-corpus document alters schema, raises importance, or escapes the detector | ✅ **39 documents, 100 assertions, all green**                                               |
+| Measured cost per day recorded in `ARCHITECTURE.md` §6                                 | ⏳ **PENDING-CREDENTIALS** — the ledger and breakdown exist; there is nothing to measure yet |
+| Budget guard degrades gracefully, never crashes, never silently stops detection        | ✅ tested across the whole ladder including 500× overspend                                   |
+| Operator reads 20 analyses and judges them non-obvious                                 | ⏳ **PENDING-OPERATOR**, and blocked on credentials                                          |
+
+**The injection corpus found 22 real detector gaps.** The Phase-4 detector covered
+override attempts and hidden text. Against the corpus it missed every invisible-
+character payload, every score-manipulation attempt, every fake-authority claim, every
+exfiltration probe, and both schema attacks — 22 of 35 hostile documents passed
+undetected. Two findings mattered most:
+
+1. **Obfuscation defeated the detector completely.** `I<ZWSP>g<ZWSP>n<ZWSP>o…` matches
+   no keyword pattern, so the payload most obviously _designed_ to evade detection was
+   the one that evaded it. The fix runs patterns against both the raw text and a
+   de-obfuscated copy, and treats the presence of the characters as a signal in its
+   own right.
+2. **The four benign controls are what make the corpus meaningful.** A detector that
+   flags everything passes all 35 hostile cases. The hardest control is a legitimate
+   article _about_ prompt injection — exactly the content this operator monitors most.
+   It must not be flagged, and it is not.
+
+**The triage prompt is long on purpose, and the arithmetic says so.** Haiku 4.5's
+minimum cacheable prefix is 4,096 tokens — the highest of any current model — and
+below it there is no error, just `cache_creation_input_tokens: 0` and full price
+forever. At ~100 triage calls a day a 1,600-token prompt never caches and costs
+160,000 tokens; a 4,500-token prompt caches and costs ~48,000 token-equivalents. The
+first draft measured 1,626 tokens and a test caught it. The added material is a
+source-shape guide and 30 worked examples — the judgements triage gets wrong most
+often — because padding to reach the floor would be a much worse trade.
+
+**Zero events reached deep analysis in the first real run**, and the run now says so.
+The top combined score over 5,007 events is 66; `AI_ANALYSIS_THRESHOLD` defaults to 70. Each event recorded its own reason, but nobody reads 65 reasons, and a tier that
+is unreachable by construction looks exactly like a system correctly finding nothing.
+Neither number has been changed to make the output look better — Phase 12 refits the
+weights against measured outcomes, and that is the right time to reconcile them.
+
+**Two corrections the tests forced.**
+
+1. **The provenance check flagged "Claude Opus 5".** Any digit counted as a factual
+   claim, so a model name in the narrative failed validation and discarded the
+   analysis. It now matches measurement-_shaped_ numbers only: multi-digit, decimal,
+   or unit-carrying.
+2. **The spend table reported 25 calls to `claude-opus-5` in a MOCK run that made
+   none.** Skipped stages record the model they would have used, and the query counted
+   rows rather than requests. Sent calls and skips are now separate columns — a
+   fabricated live result is exactly what this project forbids.
+
+**Known gaps carried forward.**
+
+1. `MOCK` mode proves the pipeline, not the analyses. Every field is marked `[MOCK]`,
+   confidence is forced LOW, and the recommendation is always VERIFY, so a MOCK run
+   can never recommend publishing anything.
+2. The corpus tests the **deterministic** layers. Whether a live model resists these
+   documents is untested; §T-1 mitigation 1 (no tools) is why that is tolerable, and
+   §6 records the residual risk as accepted.
+3. The Batch API path (50% cost) is specified in the roadmap and **not implemented** —
+   there is no non-urgent backlog to batch until analysis is actually running.
+4. `@anthropic-ai/sdk@0.72.1` does not type `stop_details`; the refusal handler reads
+   it defensively and can collapse to a direct property access when typings catch up.
 
 ---
 

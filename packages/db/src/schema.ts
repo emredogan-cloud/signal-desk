@@ -499,3 +499,60 @@ export const eventScores = sqliteTable(
 
 export type EventScoreRow = typeof eventScores.$inferSelect;
 export type NewEventScoreRow = typeof eventScores.$inferInsert;
+
+/**
+ * Stored analyses. Append-only and **versioned**.
+ *
+ * `ROADMAP.md` Phase 6: "Prompt versioning — every stored analysis records model id +
+ * prompt version", and rollback is "revert the prompt version and re-run". Both need
+ * the old rows to survive, so a re-analysis inserts rather than updates.
+ */
+export const analyses = sqliteTable(
+  'analyses',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+
+    /** 'triage' or 'analysis'. Both are stored — a triage verdict is itself a finding. */
+    stage: text('stage').notNull(),
+    /** ok | skipped | refused | failed. A skip is data: it says why nothing was spent. */
+    status: text('status').notNull(),
+    reason: text('reason').notNull(),
+    /**
+     * Machine-readable skip code. Null unless status is 'skipped'.
+     *
+     * Reporting grouped on `reason` substrings first, and mis-bucketed most skips as
+     * "other" — a summary derived from prose breaks the next time the prose changes.
+     */
+    skipCode: text('skip_code'),
+
+    /** The validated payload. Null when the stage produced nothing. */
+    payload: text('payload', { mode: 'json' }).$type<unknown>(),
+
+    confidence: text('confidence', { enum: CONFIDENCE_LEVELS }),
+    recommendedAction: text('recommended_action'),
+    injectionObserved: integer('injection_observed', { mode: 'boolean' }).notNull().default(false),
+
+    model: text('model').notNull(),
+    promptVersion: text('prompt_version').notNull(),
+
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    /** Micro-dollars. Integer, because floating-point money accumulates error. */
+    costMicroUsd: integer('cost_micro_usd').notNull().default(0),
+
+    createdAt: timestamp('created_at').notNull(),
+  },
+  (table) => [
+    index('analyses_event_idx').on(table.eventId, table.createdAt),
+    index('analyses_stage_idx').on(table.stage, table.createdAt),
+    index('analyses_cost_idx').on(table.createdAt),
+  ],
+);
+
+export type AnalysisRow = typeof analyses.$inferSelect;
+export type NewAnalysisRow = typeof analyses.$inferInsert;
