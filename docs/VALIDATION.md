@@ -225,7 +225,24 @@ Backup and verified restore work and are exercised by `pnpm security`. Nothing r
 them on a schedule. Scheduling something that has never run unattended would be worse
 than not scheduling it, but the gap is real.
 
-### 6.13 One ingest run, one machine
+### 6.13 The container has not been built successfully in this environment
+
+`Dockerfile` exists from Phase 1 and its structure is sound — the lockfile resolves
+(`Lockfile is up to date`) and every `COPY` layer succeeds. But `pnpm install` inside
+the container fails: **26 network errors** across `ETIMEDOUT`, `ECONNRESET`, and
+`EAI_AGAIN` fetching from `registry.npmjs.org`, on two attempts including one with
+`--network=host`. There are **no pnpm logic errors** — no integrity mismatch, no
+resolution failure, no authorization problem.
+
+This is a sandbox networking limitation, not a Dockerfile defect, and it is recorded
+as neither. **The container is unverified.** It has not been shown to build and it has
+not been shown to be broken. Anyone deploying should build it somewhere with reliable
+registry access before trusting it.
+
+The same environment intermittently failed `git push` with
+`Could not resolve host: github.com`, which corroborates the diagnosis.
+
+### 6.14 One ingest run, one machine
 
 Every measurement here comes from a single backfill on one developer machine. CI on
 different hardware has already caught defects local runs did not (two timing failures,
