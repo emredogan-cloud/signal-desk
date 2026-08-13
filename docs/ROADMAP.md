@@ -139,14 +139,11 @@ CI must be green before the next phase begins, tag `phase-N-complete` on merge**
 
 ## ☑ Phase 1 — Foundation, CI, and engineering discipline
 
-> **CODE-COMPLETE 2026-08-13.** Tag `phase-1-complete`. Five of six acceptance criteria met and the
-> exit criterion (clean-clone build on a second path) verified. 90 tests.
+> **DONE 2026-08-13.** Tag `phase-1-complete`. All six acceptance criteria met; exit criterion
+> (clean-clone build on a second path) verified. 90 tests at the time; 519 now.
 >
-> **One criterion outstanding: `PENDING-REMOTE` — CI green on `main`.** No GitHub repository exists
-> yet; creating a public repo under the operator's account requires his authorisation, which has not
-> been given. Every gate the CI workflow runs has been executed locally and passes (see the outcome
-> table), but "CI is green" is a claim about GitHub Actions and it is not made here. See _Phase 1
-> outcome_ at the end of this section.
+> CI went green on `github.com/emredogan-cloud/signal-desk` once the repository existed —
+> run 31721212994, Node 22 and Node 24, with the security job passing.
 
 **OBJECTIVE** A public repository that builds, tests, lints, type-checks, and scans for secrets on
 every push — containing no intelligence features whatsoever.
@@ -198,14 +195,14 @@ verified.
 
 ### Phase 1 outcome — 2026-08-13
 
-| Acceptance criterion                             | Result                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install && pnpm verify` from a clean clone | ✅ verified on a second path — and it failed there first; see below                                                                                                                                                                                                                            |
-| CI green on `main` with zero secrets             | ⏳ **PENDING-REMOTE** — no repository exists yet. Every CI gate run locally and green: `prettier --check`, `eslint --max-warnings=0`, `tsc -b`, `vitest --coverage` 90/90, `pnpm build`, `check:env --ci`, `gitleaks detect`, `pnpm audit --audit-level=high`, built worker starts and exits 0 |
-| `pnpm check:env` reports all-MOCK with no `.env` | ✅                                                                                                                                                                                                                                                                                             |
-| gitleaks passes; a planted fake key is caught    | ⚠️→✅ **failed on first run** — the default ruleset has no Anthropic pattern at all. Fixed with `.gitleaks.toml`; re-tested and caught. See `THREAT-MODEL.md` §T-3                                                                                                                             |
-| `docker build` succeeds                          | ✅ multi-stage, non-root, unused by design                                                                                                                                                                                                                                                     |
-| README does not overstate what exists            | ✅ carries an explicit built/not-built table                                                                                                                                                                                                                                                   |
+| Acceptance criterion                             | Result                                                                                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm install && pnpm verify` from a clean clone | ✅ verified on a second path — and it failed there first; see below                                                                                                |
+| CI green on `main` with zero secrets             | ✅ **VERIFIED 2026-08-13** on `github.com/emredogan-cloud/signal-desk`, run 31721212994: `verify (node 22)` ✅ · `verify (node 24)` ✅ · `security` ✅             |
+| `pnpm check:env` reports all-MOCK with no `.env` | ✅                                                                                                                                                                 |
+| gitleaks passes; a planted fake key is caught    | ⚠️→✅ **failed on first run** — the default ruleset has no Anthropic pattern at all. Fixed with `.gitleaks.toml`; re-tested and caught. See `THREAT-MODEL.md` §T-3 |
+| `docker build` succeeds                          | ✅ multi-stage, non-root, unused by design                                                                                                                         |
+| README does not overstate what exists            | ✅ carries an explicit built/not-built table                                                                                                                       |
 
 **Delivered beyond the literal list, and why.** Two items were pulled forward because they are
 cheaper to build now than to retrofit:
@@ -239,11 +236,14 @@ Docker image builds in ~2min.
 3. The scheduled **weekly live API smoke test** from `WORKING-DISCIPLINE.md` is not created. It is
    the one job that holds a secret and has nothing to test until `packages/ai` exists in Phase 6.
 4. `packages/{core,adapters,ai}` are documented scaffolds with no logic, as this phase specifies.
-5. **No GitHub repository yet.** `git init` is done, the CI workflow is written, and `gh` is
-   authenticated — but creating a public repository under the operator's account is his decision to
-   make, not one to take on his behalf. Until it exists, "CI is green" cannot be claimed and
-   `phase-1-complete` is a local tag. Unblocking command:
-   `gh repo create signal-desk --public --source=. --remote=origin --push`.
+5. ~~No GitHub repository yet.~~ **Resolved 2026-08-13** — the operator created
+   `github.com/emredogan-cloud/signal-desk` and CI has run green. Two real defects surfaced on the
+   first run that no amount of local checking had caught:
+   - the smoke-test step invoked the worker without `--once`, so it started a scheduler and hung
+     until the job was killed. Phase 3 introduced the flag and never updated the workflow.
+   - two pipeline tests exceeded vitest's 5s default on the CI runner while passing in ~1s locally.
+     The cause was not the runner: `attachToEvent` reloaded every event with all of its evidence on
+     every merge. Fixed; the suite went from 29.6s to 7.4s.
 6. **One moderate dependency advisory**, below the `--audit-level=high` CI gate and left in place
    deliberately: `esbuild <=0.24.2` (GHSA-67mh-4wv8-2f99) reaching the tree through
    `drizzle-kit > @esbuild-kit/esm-loader > @esbuild-kit/core-utils`. The vulnerability is that
@@ -262,7 +262,7 @@ Docker image builds in ~2min.
 > **DONE 2026-08-13.** Tag `phase-2-complete`. All six acceptance criteria met; exit criterion
 > (`SOURCE-INTELLIGENCE.md` updated with every newly verified and newly dead feed) met.
 > **60 sources registered, 60 probed healthy, 1 warning, 0 failures.** 294 tests.
-> CI-on-GitHub remains `PENDING-REMOTE` — see Phase 1.
+> CI green on GitHub Actions, run 31721212994.
 
 **OBJECTIVE** Every source from `SOURCE-INTELLIGENCE.md` in the database, probed, with a working
 health view.
@@ -359,7 +359,7 @@ follows URLs found _inside_ content.
 ## ◐ Phase 3 — Ingestion adapters
 
 > **CODE-COMPLETE 2026-08-13.** Tag `phase-3-complete`. Five of six acceptance
-> criteria met and measured. 428 tests.
+> criteria met and measured. 428 tests at the time. CI green.
 >
 > **Outstanding: `PENDING-ELAPSED` — the exit criterion** requires "≥24 hours of
 > continuous live ingestion with source-freshness telemetry recorded for every

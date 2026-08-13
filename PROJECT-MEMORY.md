@@ -52,7 +52,7 @@ and fix it.
 | **Ingestion**       | Feed adapters (RSS/Atom/GitHub-atom/Statuspage), HTML diffing, MOCK twins. Conditional requests, SSRF guards, circuit breaker, `robots.txt`.           |
 | **Scheduler**       | In-process `croner`, one tick per minute, per-source intervals with jitter, non-overlapping.                                                           |
 | **CLIs**            | `check:env`, `db:migrate`, `db:seed`, `sources:probe`, `sources:add`, `ingest:once`.                                                                   |
-| **CI**              | GitHub Actions workflow written; Node 22 + 24 matrix; gitleaks pinned; **has never run** (see Open issues #1).                                         |
+| **CI**              | **GREEN on GitHub Actions.** `github.com/emredogan-cloud/signal-desk`, Node 22 + 24 matrix, gitleaks pinned, dependency audit. Run 31721212994.        |
 
 ### Does NOT exist yet
 
