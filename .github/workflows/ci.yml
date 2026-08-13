@@ -83,7 +83,12 @@ jobs:
         # ROADMAP.md Phase 1 exit criteria: the operator must be able to actually run
         # it. Proving the built artifact starts and exits cleanly is the CI half of
         # that; a green unit test over the same code is not the same claim.
-        run: node apps/worker/dist/index.js
+        #
+        # `--once` is REQUIRED. Without it the worker starts its scheduler and stays
+        # up by design, and this step hangs until the job is killed — which is exactly
+        # what happened the first time CI ran against a Phase-3 worker.
+        timeout-minutes: 3
+        run: node apps/worker/dist/index.js --once
 
   security:
     name: security
