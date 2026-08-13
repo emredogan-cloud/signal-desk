@@ -1,0 +1,12 @@
+{
+  "//": "Solution file. `tsc -b` builds every package in dependency order.",
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/db" },
+    { "path": "./packages/core" },
+    { "path": "./packages/adapters" },
+    { "path": "./packages/ai" },
+    { "path": "./apps/worker" }
+  ]
+}

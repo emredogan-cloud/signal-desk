@@ -1,0 +1,18 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# THREAT-MODEL.md §T-5 — supply-chain control.
+#
+# pnpm denies lifecycle (install/postinstall) scripts to EVERY dependency unless it
+# appears in this allowlist. This is the "ignore-scripts with an explicit allowlist"
+# control from T-5, implemented with pnpm's precise mechanism rather than the blunt
+# `.npmrc` `ignore-scripts=true`, which would also block the one native module the
+# database genuinely needs and leave it silently broken.
+#
+# Adding an entry here is a security decision. It requires a note in the PR saying
+# why the package cannot work without running code at install time.
+onlyBuiltDependencies:
+  # Native SQLite binding. Compiles/downloads its prebuilt binary at install time.
+  # Without this the database layer cannot load at all.
+  - better-sqlite3

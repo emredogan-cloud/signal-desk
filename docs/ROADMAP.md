@@ -1,0 +1,942 @@
+# ROADMAP.md
+
+**Project:** `signal-desk` — a real-time AI / software / technology intelligence and personal
+authority operations console for one technical operator.
+**Written:** 2026-08-12. **Status:** in execution — see _Planning revisions_ below.
+
+Companion documents: `ARCHITECTURE.md`, `SOURCE-INTELLIGENCE.md`, `THREAT-MODEL.md`,
+`ENV-HANDBOOK.md`, `WORKING-DISCIPLINE.md`.
+
+---
+
+## Planning revisions
+
+### 2026-08-13 — autonomous continuous execution
+
+The per-phase human approval gate is removed. Phases now run continuously: once a phase's
+implementation is complete, `pnpm verify` passes, and CI is green, the next phase begins without
+waiting for an approval that this document previously required. The text at the foot of this
+document reading _"PHASE 1 IS READY FOR APPROVAL"_ is superseded.
+
+**What this revision does not change.** Every engineering gate in `WORKING-DISCIPLINE.md` stands:
+no green CI, no next phase; tests written alongside implementation; measured numbers replace
+guessed ones in the same change; no secrets in the repository; no autonomous publishing.
+
+**What it cannot change, and this document is explicit about rather than quietly dropping.** Some
+acceptance criteria here are not satisfiable by writing code, and removing the approval gate does
+not convert them into criteria that are. They fall into two kinds:
+
+| Kind                                                                          | Marked             | Examples                                                                                                                                          |
+| ----------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Human acceptance gates** — require the operator's own judgment              | `PENDING-OPERATOR` | Phase 5 top-20 ordering review; Phase 6 "20 analyses judged non-obvious"; Phase 7 "≥60% of QUOTE-NOW recommendations he would act on"             |
+| **Elapsed-time observations** — require the system to run for a stated period | `PENDING-ELAPSED`  | Phase 3 ≥24h continuous ingestion; Phase 9 ≥2 weeks trend tracking; Phase 11 ≤2 alerts/day over two weeks; Phase 13 7 days live; Phase 15 30 days |
+
+A phase whose code, tests, and CI are complete but which carries one of these is recorded as
+**CODE-COMPLETE**, never as done. `☑` means every criterion is met, including those two kinds.
+Marking a phase done on the strength of a green test suite alone would be exactly the confident
+wrongness this system exists to prevent, applied to itself.
+
+---
+
+## 1. Vision
+
+> See what matters early, understand it deeply, work out what it means, find the strongest
+> contribution this operator can make, and help him publish something genuinely useful before the
+> conversation moves on.
+
+This is not a news reader, a scheduler, a marketing tool, or a bot. It is an instrument for
+converting information into earned technical credibility.
+
+The optimisation target is **EARLY + ACCURATE + USEFUL + ORIGINAL** — in that combination. Fast and
+wrong is worse than slow and trustworthy, because the asset being built is trust.
+
+## 2. Objectives
+
+1. Detect developments across AI, software, hardware, platform policy, and emerging social formats,
+   from primary sources, with measured latency.
+2. Deduplicate them into canonical events with attached evidence.
+3. Score them on two independent axes: **objective importance** and **relevance to this operator**.
+4. Produce analysis that a technically serious reader would find non-obvious — with explicit
+   confidence, explicit unknowns, and traceable sources for every factual claim.
+5. Recommend the single strongest action, including the recommendation not to post.
+6. Keep a human in the loop for every published word.
+7. Measure what actually built authority, and feed that back into scoring.
+
+## 3. Non-goals
+
+- Autonomous posting. Not in any phase of this plan.
+- Product marketing. The engine is product-agnostic; FormAI and any future app are downstream
+  content opportunities, never the system's organising principle.
+- Multi-user, multi-tenant, or SaaS.
+- Scraping platforms whose terms prohibit it.
+- Follower-count maximisation. The system tracks visibility, authority, and audience _quality_
+  separately, and reports when growth is low-quality virality rather than authority.
+- Volume. More posts is not the goal and the system will actively recommend against posting.
+
+## 4. Architecture summary
+
+TypeScript modular monolith. Two entrypoints (`worker`, `web`) over shared packages. SQLite + WAL,
+`sqlite-vec` for similarity, local ONNX embeddings, Anthropic as the only AI vendor, in-process
+scheduler, Next.js dashboard. Runs locally through Phase 9; containerised from Phase 1 so
+deployment is a decision, not a rewrite. Full reasoning and rejected alternatives:
+`ARCHITECTURE.md`.
+
+## 5. Information quality model
+
+Every claim carries one tag, and the tag is rendered next to the claim in the UI:
+
+| Tag             | Meaning                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------- |
+| **VERIFIED**    | Supported by a primary source — official announcement, official docs, source code, release note               |
+| **OBSERVED**    | Supported by repeated independent measurement, a large dataset, or multiple credible independent observations |
+| **INFERRED**    | A reasonable conclusion from multiple known facts, stated as a conclusion                                     |
+| **SPECULATIVE** | A possible interpretation, not established                                                                    |
+
+Speculation may never be presented as fact. An event whose evidence is entirely unofficial cannot
+be emitted at `confidence = HIGH` — enforced in code, tested in `THREAT-MODEL.md` §5 test 7.
+
+## 6. Event vs trend — kept separate throughout
+
+- **EVENT** — a factual external development. Has a timestamp, sources, and a before/after.
+- **TREND** — a social behaviour, format, or interaction pattern. Has a lifecycle, not a timestamp.
+
+An event can matter without being a trend; a trend can matter without being news. They have separate
+tables, separate scoring, and separate UI. Conflating them is the most common way this kind of
+system produces bad advice.
+
+## 7. Scoring
+
+Two scores, deliberately independent (brief §22), because "important" and "important _for me_" are
+different questions and merging them hides the second.
+
+**Importance (0–100)** — recency, source reliability, novelty, technical impact, business impact,
+developer impact, consumer impact, breadth of independent corroboration, discussion velocity.
+
+**Brand relevance (0–100)** — proximity to the operator's actual expertise, whether he can _test_ it,
+whether he can add something not already said, likely audience interest, authority upside,
+discussion potential, teaching potential.
+
+**Confidence (LOW/MED/HIGH)** — derived from source category mix and corroboration count, capped by
+rules (see §5).
+
+Initial weights are **explicit constants in one file**, hand-set and clearly labelled as unvalidated
+guesses. Phase 12 replaces them with weights fitted against measured outcomes, replaying three
+months of immutable `raw_items` offline at zero API cost. Until then the system does not pretend the
+numbers mean more than they do.
+
+---
+
+# Phases
+
+Status legend: ☐ not started · ◐ in progress · ☑ done.
+
+Every phase follows the same structure. `COMMIT/PUSH` and `CI` are identical for all phases and are
+stated once here rather than repeated fifteen times: **commit on a `phase-N-*` branch, PR to `main`,
+CI must be green before the next phase begins, tag `phase-N-complete` on merge** — see
+`WORKING-DISCIPLINE.md`.
+
+---
+
+## ☑ Phase 1 — Foundation, CI, and engineering discipline
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-1-complete`. Five of six acceptance criteria met and the
+> exit criterion (clean-clone build on a second path) verified. 90 tests.
+>
+> **One criterion outstanding: `PENDING-REMOTE` — CI green on `main`.** No GitHub repository exists
+> yet; creating a public repo under the operator's account requires his authorisation, which has not
+> been given. Every gate the CI workflow runs has been executed locally and passes (see the outcome
+> table), but "CI is green" is a claim about GitHub Actions and it is not made here. See _Phase 1
+> outcome_ at the end of this section.
+
+**OBJECTIVE** A public repository that builds, tests, lints, type-checks, and scans for secrets on
+every push — containing no intelligence features whatsoever.
+
+**WHY** Every later phase depends on the ability to change code safely without a reviewer. Building
+this after the features means retrofitting discipline onto a codebase that already drifted.
+
+**INPUTS** None. No credentials.
+
+**IMPLEMENTATION**
+
+- `git init`, public GitHub repo, MIT licence, `.gitignore` (with `.env` and `data/` from the first
+  commit, before any key exists)
+- pnpm workspace: `apps/worker`, `apps/web`, `packages/{core,adapters,db,ai,shared}`
+- TypeScript strict (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`)
+- ESLint flat config + Prettier; `dangerouslySetInnerHTML` banned in `apps/web`
+- Vitest with coverage
+- Drizzle + SQLite; one migration creating the `sources` table; `pnpm db:migrate`
+- `packages/shared/config.ts` — Zod-validated environment parsing, fails fast on invalid values
+- `.env.example` exactly as in `ENV-HANDBOOK.md` §8
+- `pnpm verify` = format:check → lint → typecheck → test → build
+- `pnpm check:env` — prints the variable/mode/degradation table
+- `.github/workflows/ci.yml` running every gate from `WORKING-DISCIPLINE.md`, **with no secrets**
+- gitleaks + GitHub push protection enabled
+- `pnpm` configured with `ignore-scripts=true`
+- Dockerfile (multi-stage) — unused for now, keeps the deployment option open cheaply
+- README: what this is, how to run it, honest statement of current capability
+- The six planning documents committed under `docs/`
+
+**COMPONENTS** Repo scaffold, config layer, DB layer skeleton, CI pipeline.
+
+**TESTS** Config parser: valid env, invalid enum, missing optional, missing required-with-default.
+A smoke test asserting the worker starts and exits cleanly in MOCK mode.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] `pnpm install && pnpm verify` passes from a clean clone
+- [ ] CI green on `main` with zero secrets configured
+- [ ] `pnpm check:env` correctly reports all-MOCK with no `.env` present
+- [ ] gitleaks passes; a deliberately planted fake key in a scratch commit is caught (then removed)
+- [ ] `docker build` succeeds
+- [ ] README does not overstate what exists
+
+**EXIT CRITERIA** All of the above, plus: the operator has cloned the repo fresh on a second path
+and run `pnpm verify` successfully. A build that only works on the author's machine has not been
+verified.
+
+**ROLLBACK** N/A — nothing to roll back to.
+
+### Phase 1 outcome — 2026-08-13
+
+| Acceptance criterion                             | Result                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install && pnpm verify` from a clean clone | ✅ verified on a second path — and it failed there first; see below                                                                                                                                                                                                                            |
+| CI green on `main` with zero secrets             | ⏳ **PENDING-REMOTE** — no repository exists yet. Every CI gate run locally and green: `prettier --check`, `eslint --max-warnings=0`, `tsc -b`, `vitest --coverage` 90/90, `pnpm build`, `check:env --ci`, `gitleaks detect`, `pnpm audit --audit-level=high`, built worker starts and exits 0 |
+| `pnpm check:env` reports all-MOCK with no `.env` | ✅                                                                                                                                                                                                                                                                                             |
+| gitleaks passes; a planted fake key is caught    | ⚠️→✅ **failed on first run** — the default ruleset has no Anthropic pattern at all. Fixed with `.gitleaks.toml`; re-tested and caught. See `THREAT-MODEL.md` §T-3                                                                                                                             |
+| `docker build` succeeds                          | ✅ multi-stage, non-root, unused by design                                                                                                                                                                                                                                                     |
+| README does not overstate what exists            | ✅ carries an explicit built/not-built table                                                                                                                                                                                                                                                   |
+
+**Delivered beyond the literal list, and why.** Two items were pulled forward because they are
+cheaper to build now than to retrofit:
+
+- **Log secret redaction** (`packages/shared/redact.ts`) — `THREAT-MODEL.md` §5 test 4 assigns this
+  to Phase 14, but the logger is written in Phase 1 and every later phase logs through it. Adding
+  redaction afterwards means auditing every existing call site instead of none. 30 tests.
+- **The MOCK badge** on the placeholder page — nothing can be mislabelled yet, which is exactly why
+  it is free to add now and guarantees it is never a Phase 10 afterthought.
+
+**What the exit criterion caught.** The clean-clone requirement — "a build that only works on the
+author's machine has not been verified" — earned its place immediately. On a fresh clone `pnpm
+verify` failed with **183 lint errors**, none of which appeared locally: the verify chain lints
+before it builds, so the workspace packages' `dist/*.d.ts` files did not exist yet and
+typescript-eslint could not resolve a single cross-package type. Locally it passed only because a
+previous build had left `dist/` behind.
+
+Fixed by pointing each internal package's `types` and `exports.types` at `./src/index.ts` while
+`main` stays on `./dist/index.js` — type resolution from source, runtime resolution from build
+output. Lint and typecheck no longer depend on build order, which is also why they are now faster.
+Re-verified from a fresh clone: green.
+
+**Measurements.** None of this phase's numbers were previously guesses, so no document values were
+replaced. Recorded for reference: `pnpm verify` takes ~25s cold; the test suite runs in 0.6s; the
+Docker image builds in ~2min.
+
+**Known gaps carried forward.**
+
+1. The **repository name** is settled as `signal-desk` (§12 listed it as deliberately unresolved).
+2. The **individuals watchlist** (`SOURCE-INTELLIGENCE.md` §4) is still empty. It is Phase 2 work.
+3. The scheduled **weekly live API smoke test** from `WORKING-DISCIPLINE.md` is not created. It is
+   the one job that holds a secret and has nothing to test until `packages/ai` exists in Phase 6.
+4. `packages/{core,adapters,ai}` are documented scaffolds with no logic, as this phase specifies.
+5. **No GitHub repository yet.** `git init` is done, the CI workflow is written, and `gh` is
+   authenticated — but creating a public repository under the operator's account is his decision to
+   make, not one to take on his behalf. Until it exists, "CI is green" cannot be claimed and
+   `phase-1-complete` is a local tag. Unblocking command:
+   `gh repo create signal-desk --public --source=. --remote=origin --push`.
+6. **One moderate dependency advisory**, below the `--audit-level=high` CI gate and left in place
+   deliberately: `esbuild <=0.24.2` (GHSA-67mh-4wv8-2f99) reaching the tree through
+   `drizzle-kit > @esbuild-kit/esm-loader > @esbuild-kit/core-utils`. The vulnerability is that
+   esbuild's _development server_ accepts cross-origin requests. Nothing here runs that server;
+   drizzle-kit uses esbuild to transpile a config file at CLI invocation. The fix belongs upstream
+   in drizzle-kit's deprecated `@esbuild-kit` chain, and a `pnpm.overrides` pin would silence the
+   advisory without changing what actually executes. Re-check at Phase 14's dependency audit.
+7. **GitHub push protection** is not verified. It is the redundant half of the T-3 secret-scanning
+   control, and the Anthropic finding above showed that assuming a scanner covers a format is
+   exactly the wrong move. Enable and test it when the repository is created.
+
+---
+
+## ☐ Phase 2 — Source registry and watchlist
+
+**OBJECTIVE** Every source from `SOURCE-INTELLIGENCE.md` in the database, probed, with a working
+health view.
+
+**WHY** Silent source death (T-9) is the single most likely operational failure. The registry and
+its freshness tracking exist before ingestion, not after.
+
+**INPUTS** `SOURCE-INTELLIGENCE.md`. No credentials.
+
+**IMPLEMENTATION**
+
+- Full `sources` schema per `SOURCE-INTELLIGENCE.md` §6
+- Seed file with all VERIFIED sources, including `verified_at`
+- `pnpm sources:probe` — fetches every registered source, reports HTTP status, content type, item
+  count, and elapsed time as a table; writes `verified_at`
+- Entity registry: canonical entities (`anthropic`, `openai`, `nvidia`, …) with aliases, so
+  "Claude", "Anthropic", and "claude-opus-5" resolve to one entity
+- `pnpm sources:add` CLI
+- Default poll intervals by priority
+
+**COMPONENTS** `packages/db` source + entity models, probe CLI.
+
+**TESTS** Seed integrity (no duplicate ids, every URL parses, every priority in range, every
+category valid). Entity alias resolution. Probe result parsing against fixtures including the
+"200 with HTML body" case that killed three candidate feeds during research.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] ≥30 sources seeded, every one probed and VERIFIED with a date
+- [ ] `pnpm sources:probe` produces a readable table and exits non-zero if any Priority-1 source fails
+- [ ] Anthropic's `html_diff` target chosen, its `robots.txt` checked and recorded
+- [ ] Cloudflare / Vercel / AWS / Supabase status feeds probed and added
+- [ ] Entity registry resolves the alias set for the top 15 entities
+- [ ] The individuals list gap (§4 of the source doc) is either filled or explicitly deferred in writing
+
+**EXIT CRITERIA** Above + `SOURCE-INTELLIGENCE.md` updated with every newly verified feed and every
+newly discovered dead one.
+
+**ROLLBACK** Registry is data. Revert the seed.
+
+---
+
+## ☐ Phase 3 — Ingestion adapters
+
+**OBJECTIVE** Scheduled, polite, resilient fetching from every source type into an immutable
+`raw_items` table.
+
+**WHY** Everything downstream is a function of this. It must be boring and correct.
+
+**INPUTS** Phase 2 registry. `GITHUB_TOKEN` optional.
+
+**IMPLEMENTATION**
+
+- Adapter interface: `fetch(source, cursor) → RawItem[]`
+- `RssAdapter` (RSS + Atom, `fast-xml-parser`)
+- `GithubAtomAdapter` (`releases.atom`, `commits/{branch}.atom`) — no auth required
+- `GithubApiAdapter` — enrichment only, with the 60/hour unauthenticated limit respected explicitly
+- `StatusPageAdapter`
+- `HtmlDiffAdapter` — `robots.txt` respected, content-hash diffing, ≥15-minute floor
+- Every adapter has a `Mock*` twin reading `fixtures/`
+- Conditional requests (`If-None-Match` / `If-Modified-Since`); 304 handling
+- SSRF guards and host allowlist per `THREAT-MODEL.md` §T-6
+- Timeouts, response size caps, retry with exponential backoff, per-source circuit breaker
+- Descriptive `User-Agent` naming the project and linking the repo
+- `croner` scheduler honouring per-source intervals with jitter
+- `raw_items` written immutably with fetch metadata
+
+**COMPONENTS** `packages/adapters`, scheduler in `apps/worker`.
+
+**TESTS** Per-adapter parsing against recorded fixtures; malformed XML; a feed returning 200 with
+HTML; empty feed; 304; 429 with backoff; redirect chain ending at a private IP (must be rejected);
+oversized response; timeout. Scheduler interval and jitter logic.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] `DATA_MODE=LIVE` run ingests from all seeded sources with zero unhandled errors
+- [ ] A one-hour live run produces a plausible item count with no duplicates in `raw_items`
+- [ ] 304s are observed and cost no parsing work
+- [ ] All SSRF tests pass
+- [ ] `DATA_MODE=MOCK` reproduces a full run from fixtures with no network access at all
+      (verified by running with networking disabled)
+- [ ] Circuit breaker demonstrably opens on a source returning persistent 500s
+
+**EXIT CRITERIA** Above + ≥24 hours of continuous live ingestion with source-freshness telemetry
+recorded for every source.
+
+**ROLLBACK** Adapters are additive per source type. Disable a source row rather than reverting code.
+
+---
+
+## ☐ Phase 4 — Normalisation, clustering, deduplication
+
+**OBJECTIVE** Many source items become one canonical event with attached evidence.
+
+**WHY** Brief §19–20. Without this the dashboard is a feed reader showing the same launch nine times.
+
+**INPUTS** Phase 3 `raw_items`. No credentials — embeddings are local.
+
+**IMPLEMENTATION**
+
+- Sanitisation pipeline (T-1 mitigation 3) — runs here, before anything stores or reads content
+- Normalisation → `CanonicalEvent` draft: entity extraction via the Phase-2 registry, artifact
+  extraction (model names, version strings, product names) by rule, URL canonicalisation,
+  `event_occurred_at` from feed timestamps
+- Three-stage dedup per `ARCHITECTURE.md` §5
+- `sqlite-vec` + local `bge-small-en-v1.5` ONNX embeddings
+- Primary-source selection by source category, not arrival order
+- Merge audit log; reversible unmerge
+
+**COMPONENTS** `packages/core/normalize`, `packages/core/cluster`.
+
+**TESTS** A **labelled fixture set**: ~200 real items covering ~40 known events, hand-labelled with
+the correct clustering. Measured precision and recall reported by the test suite. Adversarial cases:
+two genuinely different models from the same vendor announced the same day (must NOT merge); the
+same launch reported by six outlets (must merge); an update to an existing event arriving 3 days
+later. Sanitiser tests from `THREAT-MODEL.md` §5.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] Dedup precision ≥0.95 and recall ≥0.85 on the labelled set — **and the actual measured numbers
+      written into `ARCHITECTURE.md` §5, replacing the 0.86 guess**
+- [ ] The six-outlet launch case produces exactly one event with six evidence rows
+- [ ] The two-models-same-day case produces two events
+- [ ] Unmerge restores prior state exactly
+- [ ] Sanitiser neutralises every case in the hidden-text fixture set
+- [ ] Full pipeline replay over `raw_items` is deterministic — same input, same clusters
+
+**EXIT CRITERIA** Above + a week of live data reviewed by eye, with any misclustering added to the
+labelled set as a regression case.
+
+**ROLLBACK** Clustering runs over immutable `raw_items`. Any change can be re-run from scratch;
+`events` is a derived table.
+
+---
+
+## ☐ Phase 5 — Scoring: importance, brand relevance, confidence
+
+**OBJECTIVE** Deterministic, explainable, LLM-free scoring.
+
+**WHY** Rules before models. This is the gate that keeps ~90% of items away from the LLM, and it is
+the cost-control mechanism for the entire system. It must also be _explainable_ — an operator who
+cannot see why something scored 82 will not trust the number.
+
+**INPUTS** Phase 4 events. No credentials.
+
+**IMPLEMENTATION**
+
+- Importance, brand relevance, and confidence scorers as pure functions in `packages/core/score`
+- All weights as named constants in one file, each with a comment stating it is an unvalidated
+  starting guess
+- **Score explanation**: every score returns its component breakdown, stored and rendered
+- Velocity from corroboration arrival rate + HN points delta + Reddit comment delta + GitHub star
+  delta (the X-velocity substitute — explicitly labelled INFERRED, to be validated in Phase 12)
+- Confidence capping rules: unofficial-only evidence → LOW + SPECULATIVE
+- The **rule gate**: deterministic kill filters before any LLM spend (known-noise sources, duplicate
+  suppression, below-floor scores, off-topic categories, the arXiv corroboration gate)
+
+**COMPONENTS** `packages/core/score`.
+
+**TESTS** Golden-file tests: a fixed set of events with expected score ranges. Monotonicity (adding
+an official source never lowers confidence). Boundary cases. Gate kill-rate measured against a week
+of real data.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] Every score is reproducible and accompanied by a component breakdown
+- [ ] Gate kill rate is measured and reported; target ≥85% of raw items killed before the LLM
+- [ ] Confidence capping rules provably cannot be bypassed
+- [ ] Operator reviews the top-20 by importance over a week of real data and agrees the ordering is
+      defensible — **this is a human acceptance gate and it is not optional**
+
+**EXIT CRITERIA** Above. If the operator disagrees with the ordering, the weights change and the
+review repeats. Shipping a scorer he does not trust makes every later phase worthless.
+
+**ROLLBACK** Scores are derived; recompute.
+
+---
+
+## ☐ Phase 6 — AI analysis engine
+
+**OBJECTIVE** Turn a scored event into structured analysis: what happened, what changed, before/after,
+implications by audience, what is still unknown, confidence, and the do-not-say list.
+
+**WHY** This is where the system stops being a filter and starts being an analyst.
+
+**INPUTS** Phase 5 events. **`ANTHROPIC_API_KEY`** (or `AI_MODE=MOCK`).
+
+**IMPLEMENTATION**
+
+- `packages/ai`: Anthropic client wrapper, model tiering, budget guard, token accounting
+- Triage call (`claude-haiku-4-5`), structured output, over the gate survivors
+- Analysis call (`claude-opus-5`), structured output, only above `AI_ANALYSIS_THRESHOLD`
+- **Untrusted-content envelope** with per-request random delimiter (T-1 mitigation 4)
+- Prompt caching with a **verified** cache hit — assert `cache_read_input_tokens > 0`, remembering
+  Haiku's 4096-token prefix floor
+- Batch API path for non-urgent work at 50% cost
+- Injection detector as a flagging signal, not a silent filter
+- Per-claim confidence tags and evidence ids; **claims without evidence ids fail validation**
+- Prompt versioning — every stored analysis records model id + prompt version
+- `AI_MODE=MOCK` returning deterministic canned analyses
+
+**COMPONENTS** `packages/ai`, `packages/core/analyze`.
+
+**TESTS** The full injection corpus from `THREAT-MODEL.md` §5 (~30 hostile documents). Schema
+conformance on every response. Budget guard degradation under simulated overspend. Provenance
+validation rejecting an unsourced number. Cache-hit assertion. MOCK determinism.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] Analyses conform to schema 100% of the time across ≥100 real events
+- [ ] Prompt cache demonstrably hits (`cache_read_input_tokens > 0` on the second call of a run)
+- [ ] No injection-corpus document alters schema, raises importance above the rules baseline, or
+      escapes the detector
+- [ ] **Measured cost per day recorded in `ARCHITECTURE.md` §6, replacing the estimate**
+- [ ] Budget guard degrades gracefully, never crashes, never silently stops detection
+- [ ] Operator reads 20 analyses and judges them non-obvious — **human acceptance gate**
+
+**EXIT CRITERIA** Above. The human gate is the important one: if the analyses read like a summary of
+the press release, the prompts are wrong and the phase is not done.
+
+**ROLLBACK** Analyses are versioned rows; revert the prompt version and re-run.
+
+---
+
+## ☐ Phase 7 — X content strategy engine
+
+**OBJECTIVE** For each high-priority event, produce the five options — quote / reply / original /
+educational / wait — plus the one decisive recommendation and its reasoning.
+
+**WHY** Analysis without a recommended action leaves the hardest judgment to the operator at exactly
+the moment he is short of time.
+
+**INPUTS** Phase 6 analyses.
+
+**IMPLEMENTATION**
+
+- Expert-angle engine (brief §26): technical explanation, comparison, previous-version diff,
+  benchmark interpretation, cost implication, second-order effect, myth correction, skepticism
+- Five option generators with per-option rationale
+- The **"WHY NOW / WHY ME / WHAT CAN I ADD / EXPECTED OUTCOME"** panel
+- The **DON'T POST** path with explicit reasons (saturated, no unique angle, weak evidence, better
+  explained elsewhere, low authority gain, reputational risk, insufficient information)
+- Forcing rules: rumour/leak → WAIT-VERIFY; accusation/attribution → WAIT-VERIFY + manual flag
+- DO-NOT-SAY generation per event
+- Suggested commentary with every factual claim carrying its evidence id
+
+**COMPONENTS** `packages/core/strategy`.
+
+**TESTS** Forcing rules cannot be bypassed by any input. Every generated claim carries an evidence
+id. Recommendation distribution over a week of real events includes a meaningful WAIT/IGNORE share.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] Every high-priority event produces all five options with distinct, non-generic reasoning
+- [ ] **≥30% of scored events over a representative week receive DON'T POST or WAIT** — a system that
+      recommends action on everything has no judgment
+- [ ] No generated commentary contains an unsourced number
+- [ ] Accusation and rumour forcing rules pass adversarial tests
+- [ ] Operator judges ≥60% of QUOTE-NOW recommendations as ones he would actually act on —
+      **human acceptance gate**
+
+**EXIT CRITERIA** Above.
+
+**ROLLBACK** Derived from analyses; regenerate.
+
+---
+
+## ☐ Phase 8 — Educational content engine
+
+**OBJECTIVE** Identify one or two genuine teaching opportunities per day, with the exact method,
+worked example, and stated limitations.
+
+**WHY** Teaching a working technique is one of the highest-authority content types available and it
+does not depend on being first.
+
+**INPUTS** Phase 6/7. Recent events + the operator's own tooling context (optional, per brief §73).
+
+**IMPLEMENTATION**
+
+- Opportunity detection: topic, why now, audience, hook, teaching point, exact prompt/method,
+  worked example, limitations, suggested format
+- Runs nightly via the Batch API (50% cost)
+- **Every technique must state its limitations and failure modes.** A workflow presented without its
+  failure cases is the kind of content that damages credibility when a reader tries it.
+- The **experiment generator** (brief §34): question, hypothesis, required inputs, procedure,
+  metrics, result (operator-filled), content angle
+- Experiment queue with status tracking
+
+**COMPONENTS** `packages/core/strategy` (educational + experiment modules).
+
+**TESTS** Schema conformance. Limitations section is non-empty and non-generic. Experiment
+procedures are concrete enough to execute (checked by human review of a sample).
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] ≥1 usable educational opportunity per day over a two-week run
+- [ ] Every technique includes limitations and failure modes
+- [ ] ≥5 experiments generated that the operator judges genuinely runnable in under 2 hours
+- [ ] Batch API path confirmed working at reduced cost
+
+**EXIT CRITERIA** Above + the operator has actually run one generated experiment end to end.
+
+**ROLLBACK** Additive.
+
+---
+
+## ☐ Phase 9 — Trend intelligence
+
+**OBJECTIVE** Detect emerging social formats and behaviours — separately from news — and place them
+on a lifecycle.
+
+**WHY** Brief §9–11, §44. This is the capability most likely to be shallow, so it is scoped honestly.
+
+**INPUTS** Phases 3–7. Human observation.
+
+**IMPLEMENTATION**
+
+- `trends` table and the full trend card: name, platform, first observed, growth, maturity,
+  mechanism, how to participate, original version, creator adaptation, risk, decision
+- Lifecycle: UNKNOWN → EMERGING → ACCELERATING → MAINSTREAM → SATURATED → DECLINING
+- Recommendations by stage: emerging → act; accelerating → differentiated angle; mainstream → only
+  with a strong unique perspective; saturated → ignore; declining → ignore
+- Automated signal: format/technique repetition across HN, Reddit, Lobsters, GitHub topic velocity
+- **Manual trend entry is a first-class feature, not a fallback**
+
+**Honest scoping.** Without paid social data, automated cross-platform trend detection is weak.
+Formats on X, TikTok, and Instagram are largely invisible to free feeds. The realistic design is
+**human-observed, machine-tracked**: the operator enters a trend he has seen; the system tracks its
+trajectory, scores saturation, generates a differentiated angle, and tells him when the window has
+closed. Claiming automated cross-platform trend detection would be the kind of overclaim this whole
+system is built to avoid.
+
+**COMPONENTS** `packages/core/trends`.
+
+**TESTS** Lifecycle transition logic. Saturation scoring against historical fixtures with known
+outcomes. Recommendation-by-stage matrix.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] Manual trend entry → complete trend card → tracked trajectory over ≥2 weeks
+- [ ] Lifecycle stage transitions are explainable
+- [ ] Automated detection surfaces ≥1 genuine emerging technical format from HN/Reddit/GitHub over
+      a month — **and if it does not, that is documented as a limitation rather than papered over**
+- [ ] Saturation detection correctly marks a known-saturated format as SATURATED
+
+**EXIT CRITERIA** Above, including the honest documentation of what automated detection cannot do.
+
+**ROLLBACK** Isolated subsystem.
+
+---
+
+## ☐ Phase 10 — Dashboard command centre
+
+**OBJECTIVE** The interface that makes the whole system usable in the 15 minutes the operator has.
+
+**WHY** Everything before this is invisible without it.
+
+**INPUTS** All prior phases.
+
+**IMPLEMENTATION**
+
+- **Live intelligence stream**: time, event, source, entity, category, priority, confidence,
+  velocity, trend stage, brand relevance, status
+- **Event detail**: what happened · primary source · secondary sources · exact time · what changed ·
+  before · after · key technical details · business/developer/consumer implications · why it matters ·
+  what is still unknown · confidence · source quality
+- **Action panel**: the five options, WHY NOW, WHY ME, DO-NOT-SAY, the single recommendation
+- **Modes**: MORNING BRIEF · LIVE · END OF DAY (what happened, what we missed, what to learn)
+- **Health panel**: source freshness, detection latency, dedup rate, cost today, cache hit ratio,
+  gate kill rate
+- **Suspicious content panel** (flagged injection attempts)
+- MOCK badge, permanent and unmissable, whenever any mode is MOCK
+- Score breakdown visible on demand for every score
+- Security: CSP, no `dangerouslySetInnerHTML`, external link hosts shown as text, bound to `127.0.0.1`
+
+**COMPONENTS** `apps/web`.
+
+**TESTS** Component tests for the stream, detail, and action panels. Accessibility pass. XSS test
+rendering hostile titles and summaries from the injection corpus.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] Operator can go from opening the dashboard to a decided action in **under 60 seconds** for the
+      top event
+- [ ] Morning brief renders in one screen without scrolling on a laptop
+- [ ] Health panel makes a dead source obvious without being looked for
+- [ ] Hostile content from the injection corpus renders inert
+- [ ] MOCK badge cannot be missed
+- [ ] **Decision on remote deployment made here, with data**: measure detection misses attributable
+      to machine-off hours over the preceding month; deploy only if the number justifies it, and add
+      auth in the same change if so
+
+**EXIT CRITERIA** Above + one week of the operator actually using it daily as his primary surface.
+
+**ROLLBACK** UI only.
+
+---
+
+## ☐ Phase 11 — Alerts
+
+**OBJECTIVE** Tell the operator about URGENT things without training him to ignore notifications.
+
+**INPUTS** Phase 10.
+
+**IMPLEMENTATION** Four tiers (URGENT / HIGH / TREND / EDUCATIONAL); ntfy push with console
+fallback; `ALERT_MIN_PRIORITY` defaulting to `urgent`; deduplication so one event alerts once;
+quiet hours; **source-freshness alerting (T-9)** — Priority-1 silent 6h, Priority-2 silent 24h.
+
+**TESTS** Tier routing, dedup, quiet hours, freshness alert firing.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] **≤2 alerts per day on average** over two weeks — brief §46 is explicit that noise is the
+      failure mode, and an alert system the operator mutes has negative value
+- [ ] Every alert fired is one the operator agrees was worth interrupting him
+- [ ] A deliberately disabled Priority-1 source produces a freshness alert within 6 hours
+
+**EXIT CRITERIA** Above.
+
+**ROLLBACK** Set `ALERT_MIN_PRIORITY` beyond any tier.
+
+---
+
+## ☐ Phase 12 — Analytics and the feedback loop
+
+**OBJECTIVE** Measure what actually built authority, and use it to fix the scoring.
+
+**WHY** Without this the weights stay guesses forever and the system never improves.
+
+**INPUTS** **`X_*` credentials** (owned reads at $0.001). Phase 10 action log.
+
+**IMPLEMENTATION**
+
+- X owned reads for the operator's own posts: impressions, replies, reposts, profile visits, follows
+- Four tracked dimensions kept separate (brief §40): **visibility**, **authority**, **audience**,
+  **content quality**
+- Authority signals: replies from accounts the registry classifies as high-signal; mentions by
+  respected accounts; conversation depth — not raw engagement
+- **Low-quality virality vs authority growth** classifier, reported explicitly
+- Attribution: which recommendation → which post → what outcome
+- **Offline weight refitting** over immutable `raw_items` — replay three months of history under
+  candidate weights at zero API cost and compare which events would have surfaced
+- Validate or discard the HN/Reddit/GitHub velocity proxy for X velocity (the INFERRED assumption
+  from Phase 5)
+
+**TESTS** Attribution correctness. Replay determinism. Weight-fitting produces reproducible output.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] ≥30 posts attributed to recommendations with outcomes recorded
+- [ ] Visibility / authority / audience / quality reported separately, never merged into one number
+- [ ] Offline replay runs over ≥3 months of history at **$0 API cost**
+- [ ] **Refitted weights written into the scoring constants file, replacing the guesses, with the
+      measurement recorded in this document**
+- [ ] The velocity-proxy assumption is explicitly validated or explicitly discarded in writing
+- [ ] X spend stays within `X_DAILY_BUDGET_USD`
+
+**EXIT CRITERIA** Above. This phase is where the system starts learning; a green CI with unfitted
+weights does not satisfy it.
+
+**ROLLBACK** Weights are constants; revert the file.
+
+---
+
+## ☐ Phase 13 — Live platform integration
+
+**OBJECTIVE** Everything running live, end to end, with real credentials and real spend.
+
+**INPUTS** All credentials.
+
+**IMPLEMENTATION** All modes LIVE. Optional assisted publishing behind `X_ENABLE_POSTING`, requiring
+per-post human confirmation showing the exact bytes to be sent. Rate self-limits.
+`X_MAX_POSTS_PER_DAY`. Write scope granted to the X token **only here** and only if this feature is
+actually built.
+
+**TESTS** Live smoke tests for every adapter. Rate-limit handling under real conditions. Posting
+confirmation flow, including cancellation.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] 7 consecutive days live with no unhandled errors
+- [ ] Real costs within both budget ceilings, with the actuals recorded
+- [ ] Detection latency measured against ≥10 events with known publication times
+- [ ] If posting is enabled: no post can be sent without an explicit confirmation showing final text
+- [ ] Rate limits handled without data loss
+
+**EXIT CRITERIA** Above + measured `event_occurred → detected` and `detected → actionable` medians
+written into this document.
+
+**ROLLBACK** Every mode has a MOCK setting. Revert per subsystem.
+
+---
+
+## ☐ Phase 14 — Security, observability, and hardening
+
+**OBJECTIVE** Close every control in `THREAT-MODEL.md` §4 and exercise the runbooks.
+
+**IMPLEMENTATION** Full security test suite; expanded injection red-team corpus; dependency audit;
+permission review across all tokens; **credential rotation drill actually performed** for all three
+vendors; log redaction verification; backup and restore of the SQLite file verified by restoring to
+a clean path; incident runbook written.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] Every security test in `THREAT-MODEL.md` §5 passes
+- [ ] Rotation performed for Anthropic, X, and GitHub with recorded downtime
+- [ ] Backup restored successfully to a clean environment
+- [ ] No high or critical dependency advisories
+- [ ] Every token verified least-privilege
+- [ ] Log redaction verified against a planted synthetic secret
+
+**EXIT CRITERIA** Above.
+
+---
+
+## ☐ Phase 15 — Production E2E validation
+
+**OBJECTIVE** Prove the system works, and write down honestly where it does not.
+
+**IMPLEMENTATION** 30-day continuous run. Full validation report covering: source ingestion, event
+detection, clustering, deduplication, source confidence, importance scoring, brand relevance, AI
+analysis, X strategy, educational opportunities, trend detection, dashboard, alerts, security,
+prompt-injection defense, rate limits, API resilience, observability, and real-world behaviour.
+
+**ACCEPTANCE CRITERIA**
+
+- [ ] 30 days continuous operation with uptime recorded
+- [ ] Detection latency, dedup precision/recall, alert precision, and cost all measured and reported
+- [ ] ≥20 posts published through the system's recommendations with outcomes attributed
+- [ ] The operator states plainly whether the system saved him time and improved his output — and if
+      it did not, that answer is recorded rather than explained away
+- [ ] **A written list of what the system does badly**, carried forward as the next backlog
+
+**EXIT CRITERIA** The validation report exists and is honest.
+
+---
+
+# 8. Dependencies between phases
+
+```
+1 ──▶ 2 ──▶ 3 ──▶ 4 ──▶ 5 ──▶ 6 ──▶ 7 ──▶ 10 ──▶ 11
+                                    ├──▶ 8 ──┘      │
+                                    └──▶ 9 ─────────┤
+                                                    ▼
+                                          12 ──▶ 13 ──▶ 14 ──▶ 15
+```
+
+Phases 8 and 9 are parallelisable with 7 and are the safest to defer if time is short.
+Phases 1–5 require **no credentials whatsoever**.
+
+# 9. Minimum viable release
+
+**Phases 1–7 + 10.** That is: real ingestion, real deduplication, real scoring, real analysis, real
+recommendations, and a usable dashboard. Alerts, trends, education, and the feedback loop are
+genuine improvements but the system is _useful_ at Phase 10.
+
+If the operator has to stop somewhere, stop there — do not stop mid-pipeline at Phase 5, which
+produces a scored list nobody can act on.
+
+# 10. What can remain mocked, and for how long
+
+| Subsystem | Mockable through | Notes                                                   |
+| --------- | ---------------- | ------------------------------------------------------- |
+| Ingestion | Phase 5          | Fixtures are recorded real payloads                     |
+| AI        | Phase 9          | `AI_MODE=MOCK` runs the full pipeline deterministically |
+| X         | Phase 12         | Nothing before analytics needs X at all                 |
+| Alerts    | Phase 11         | Console fallback                                        |
+
+**Nothing may remain mocked after Phase 13**, and the MOCK badge exists so that this is never in
+doubt.
+
+# 11. Biggest risks
+
+| Risk                                                | Severity | Mitigation                                                               | Where                       |
+| --------------------------------------------------- | -------- | ------------------------------------------------------------------------ | --------------------------- |
+| **X API pricing makes monitoring infeasible**       | Resolved | Architecture split: free feeds for ingestion, owned reads for analytics  | `SOURCE-INTELLIGENCE.md` §0 |
+| Prompt injection via ingested content               | High     | Capability starvation + structured outputs + sanitisation + human review | T-1                         |
+| Confidently wrong analysis published                | High     | Confidence tags, evidence ids, DO-NOT-SAY, WAIT forcing rules            | T-2                         |
+| Silent source death                                 | High     | Freshness tracking + alerting + startup self-test                        | T-9                         |
+| Cost blowout                                        | Medium   | Rule gate, tiering, batch API, dual budget guards                        | T-10                        |
+| Local-only means missed detections                  | Medium   | Measured in Phase 10; deploy only if data justifies it                   | `ARCHITECTURE.md` §2        |
+| Trend detection is genuinely weak without paid data | Medium   | Scoped honestly as human-observed / machine-tracked                      | Phase 9                     |
+| Analysis is competent but obvious                   | **High** | Human acceptance gates in Phases 5, 6, 7                                 | Phases 5–7                  |
+| Operator has no time to use it                      | High     | 60-second decision target; ≤2 alerts/day                                 | Phase 10, 11                |
+| Model/API drift                                     | Low      | Config-driven model ids, scheduled live smoke test                       | T-11                        |
+
+The risk worth staring at is **"competent but obvious."** Every other risk has a technical
+mitigation. This one is only caught by the human acceptance gates, and it is the one that decides
+whether the system is worth running at all.
+
+# 12. Cross-document consistency check
+
+Performed 2026-08-12 across all six documents:
+
+- ✅ X's role is identical in all four documents that mention it: publishing + measurement, never
+  ingestion.
+- ✅ Model IDs, prices, and the Haiku 4096-token cache floor agree between `ARCHITECTURE.md` §6 and
+  `ENV-HANDBOOK.md` §3.
+- ✅ Every threat in `THREAT-MODEL.md` §4 maps to a phase that exists here; every phase's security
+  work maps back.
+- ✅ Every source-registry field in `SOURCE-INTELLIGENCE.md` §6 is created in Phase 2.
+- ✅ MOCK/LIVE semantics are identical in `ARCHITECTURE.md` §8, `ENV-HANDBOOK.md` §2, and
+  `WORKING-DISCIPLINE.md`.
+- ✅ No duplicated scope: architecture decisions live only in `ARCHITECTURE.md`, source facts only in
+  `SOURCE-INTELLIGENCE.md`, secrets only in `ENV-HANDBOOK.md`, security only in `THREAT-MODEL.md`,
+  process only in `WORKING-DISCIPLINE.md`. This document sequences and gates them.
+- ⚠️ **Deliberately unresolved:** the repository name (`signal-desk` proposed) and the individuals
+  watchlist (Phase 2). Both need the operator's input.
+
+---
+
+# FINAL ROADMAP DECISION
+
+**Total phases:** 15.
+
+| #   | One line                                                         |
+| --- | ---------------------------------------------------------------- |
+| 1   | Public repo, CI/CD, config, test infrastructure — no features    |
+| 2   | Source registry, entity registry, probe tooling                  |
+| 3   | Ingestion adapters: RSS, GitHub Atom, status pages, HTML diff    |
+| 4   | Normalisation, three-stage deduplication, canonical events       |
+| 5   | Deterministic scoring + the pre-LLM rule gate                    |
+| 6   | AI analysis engine with injection defense and budget control     |
+| 7   | X content strategy: five options, one recommendation, DON'T POST |
+| 8   | Educational opportunities + experiment generator                 |
+| 9   | Trend intelligence — human-observed, machine-tracked             |
+| 10  | Dashboard command centre; deployment decision made with data     |
+| 11  | Alerts with a hard noise ceiling                                 |
+| 12  | Analytics, attribution, offline weight refitting                 |
+| 13  | Live platform integration; optional assisted publishing          |
+| 14  | Security hardening, rotation drills, runbooks                    |
+| 15  | 30-day production validation and an honest limitations report    |
+
+**Major dependencies:** strictly linear 1→7, with 8 and 9 parallel to 7; 10 gates 11; 12 requires 10;
+13 requires everything.
+
+**Biggest architectural risks:** local-only deployment means detection stops when the machine is off
+(measured and revisited at Phase 10); SQLite is right for this scale but a migration to Postgres
+would be required if the design ever became multi-user; the modular monolith is deliberately hard to
+scale horizontally, which is correct for one user and wrong for any other shape.
+
+**Biggest data-source risks:** X pricing eliminated the richest social signal — the free-feed
+substitute is INFERRED and unvalidated until Phase 12; Anthropic publishes no RSS, so its coverage
+depends on HTML diffing that can break; individual expert monitoring is largely unsolved without
+paid access.
+
+**External services:** Anthropic (paid, the only mandatory one) · X API (paid, optional, metered) ·
+GitHub (free) · ntfy (free, optional). That is the complete list.
+
+**Recommended stack:** TypeScript · Node 22 · pnpm workspaces · SQLite + Drizzle + sqlite-vec ·
+local ONNX embeddings · Anthropic (`claude-haiku-4-5` triage, `claude-opus-5` analysis) · croner ·
+Next.js 16 · Vitest · GitHub Actions.
+
+**Minimum viable release:** Phases 1–7 + 10.
+
+**What can remain mocked:** ingestion through Phase 5, AI through Phase 9, X through Phase 12,
+alerts through Phase 11. Nothing after Phase 13.
+
+**What requires real credentials:** Anthropic from Phase 6, X from Phase 12, everything from Phase 13.
+
+**When live X integration happens:** Phase 12 (read-only owned analytics), Phase 13 (optional
+assisted posting, human-confirmed).
+
+**When trend detection becomes active:** Phase 9, scoped honestly as human-observed and
+machine-tracked.
+
+**When the system becomes useful:** Phase 10. Before that it is infrastructure.
+
+**When full E2E validation happens:** Phase 15, over 30 continuous days.
+
+**Estimated recurring cost:** $37–60/month as designed; $10–20/month with the cost levers in
+`ARCHITECTURE.md` §6 applied. This is the one real expense and it should be re-measured, not
+assumed, at Phase 6.
+
+---
+
+> ## **EXECUTION IS UNDER WAY.**
+
+Approval was given on 2026-08-13 for continuous execution of the whole roadmap. See _Planning
+revisions_ at the top of this document for what that changed and, more importantly, what it did
+not — the human acceptance gates in Phases 5, 6, 7, 8 and the elapsed-time criteria in Phases 3, 9,
+11, 13, 15 remain outstanding regardless of how much code is written.

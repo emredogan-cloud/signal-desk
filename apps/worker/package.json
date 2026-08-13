@@ -1,0 +1,14 @@
+{
+  "name": "@signal-desk/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@signal-desk/adapters": "workspace:*",
+    "@signal-desk/ai": "workspace:*",
+    "@signal-desk/core": "workspace:*",
+    "@signal-desk/db": "workspace:*",
+    "@signal-desk/shared": "workspace:*"
+  }
+}

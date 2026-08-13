@@ -1,0 +1,89 @@
+title = "signal-desk secret scanning"
+
+# THREAT-MODEL.md §T-3 — asset A3 (API credentials) in a public repository.
+#
+# WHY THIS FILE EXISTS
+#
+# Verifying the Phase 1 acceptance criterion "a deliberately planted fake key is
+# caught" found that gitleaks 8.30.1's default ruleset does NOT detect Anthropic API
+# keys. A correctly shaped 110-character `sk-ant-api03-…` key committed to a tracked
+# file scanned clean, both in a `.env` and in a `.ts`. A GitHub PAT in the same
+# commit was caught, so the scanner was working — it simply had no Anthropic rule.
+#
+# That gap matters more here than it would in most repositories: ANTHROPIC_API_KEY is
+# the *only* mandatory secret this system holds (ENV-HANDBOOK.md §3), a leak is
+# direct financial loss, and the repository is public by requirement. GitHub push
+# protection may well catch it independently, but T-3 specifies both controls —
+# "push protection catches known vendor formats, gitleaks catches the rest" — and
+# discovering that the second one was blind to the first one's format is exactly the
+# kind of thing an untested control hides.
+#
+# These rules extend the default set rather than replacing it, so every vendor
+# gitleaks already knows about stays covered.
+
+[extend]
+useDefault = true
+
+# ─── Anthropic ─────────────────────────────────────────────────────────
+# Real keys are `sk-ant-api03-` followed by ~97 characters.
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-(?:api|admin)\d{2}-[A-Za-z0-9_\-]{80,140}'''
+keywords = ["sk-ant-"]
+entropy = 3.5
+
+[[rules]]
+id = "anthropic-credential-generic"
+description = "Anthropic credential — any sk-ant- form, including auth tokens"
+regex = '''sk-ant-[A-Za-z0-9_\-]{24,}'''
+keywords = ["sk-ant-"]
+# The backstop for a key format that changes without this file changing with it.
+#
+# Entropy is what separates a credential from a fixture. The redaction suite uses
+# `sk-ant-api03-AAAA…` to exercise the vendor *shape*; a repeated-character payload
+# scores 0, a real key scores ~5.5. This is deliberately not a path allowlist —
+# allowlisting `**/*.test.ts` would mean a genuine key pasted into a fixture goes
+# unnoticed forever.
+entropy = 3.5
+
+# ─── X / Twitter ───────────────────────────────────────────────────────
+# The four X OAuth values are plain alphanumeric strings with no prefix, so nothing
+# can distinguish one from an identifier on shape alone. Only the assignment form is
+# detectable. The runtime control is `registerSecret()` in packages/shared, which
+# makes the configured values unloggable regardless of shape.
+
+[[rules]]
+id = "x-oauth-assignment"
+description = "X API credential assigned a value"
+regex = '''(?i)x[_-](?:api[_-]key|api[_-]secret|access[_-]token|access[_-]token[_-]secret)\s*[:=]\s*['"]([A-Za-z0-9_\-]{16,})['"]'''
+keywords = ["x_api", "x-api", "x_access", "x-access"]
+entropy = 3.5
+
+# ─── Deliberately NOT a rule: ntfy topic ───────────────────────────────
+#
+# ENV-HANDBOOK.md §6 is right that "an ntfy topic name *is* the credential", and the
+# obvious rule — `ntfy[_-]?topic\s*[:=]\s*(...)` — was written, tested, and removed.
+#
+# On this codebase it had zero precision. Every match was a false positive: the Zod
+# schema field `NTFY_TOPIC: optionalSecret`, the `NTFY_TOPIC=` line in the
+# ENV-HANDBOOK's `.env.example` listing, and a redaction test fixture. It cannot
+# match a real topic anywhere else, because a topic name is just a string.
+#
+# A scanner that only ever fires on schema definitions and documentation is one the
+# operator learns to skip past — the same failure mode WORKING-DISCIPLINE.md
+# identifies for a red CI and the roadmap identifies for alert noise. The realistic
+# leak path for this credential is a committed `.env`, which `.gitignore` blocks from
+# the first commit and `pnpm check:env:ci` gates independently.
+
+[allowlist]
+description = "Paths that cannot contain a credential by construction"
+paths = [
+  # Committed template. Every credential key ships blank, and `pnpm check:env:ci`
+  # fails the build if any of them ever carries a value — a stronger guarantee than
+  # this allowlist, which only stops the scanner matching on the key names.
+  '''^\.env\.example$''',
+  # This file. Its regexes contain the vendor prefixes they search for.
+  '''^\.gitleaks\.toml$''',
+]

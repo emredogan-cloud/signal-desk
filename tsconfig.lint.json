@@ -1,0 +1,30 @@
+{
+  "//": [
+    "Type-checking config for ESLint and for tests.",
+    "",
+    "The per-package tsconfigs are BUILD configs: composite, emitting, and excluding",
+    "test files so that dist/ contains only shipped code. That leaves *.test.ts",
+    "outside every project, which type-aware linting cannot work with.",
+    "",
+    "This config covers everything instead, emits nothing, and is what both",
+    "`eslint` and the test half of `pnpm typecheck` point at. A type error in a test",
+    "is a failure — a test that does not compile is not protecting anything."
+  ],
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "apps/worker/src/**/*.ts",
+    "*.config.ts",
+    "packages/db/drizzle.config.ts",
+    "eslint.config.js"
+  ],
+  "exclude": ["node_modules", "**/dist/**", "apps/web/**"]
+}

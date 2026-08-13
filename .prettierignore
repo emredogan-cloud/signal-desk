@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+coverage
+.next
+out
+pnpm-lock.yaml
+data
+*.tsbuildinfo
+packages/db/migrations
+fixtures
+apps/web/tsconfig.json
+apps/web/next-env.d.ts

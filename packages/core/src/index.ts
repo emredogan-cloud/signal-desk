@@ -1,0 +1,18 @@
+/**
+ * `@signal-desk/core` — domain logic. **This package performs no I/O.**
+ *
+ * ARCHITECTURE.md §3: everything core needs is passed in. That constraint is what
+ * makes scoring and clustering testable without a network, and it is what makes MOCK
+ * mode a first-class citizen rather than a bolt-on. A `fetch`, a `fs` import, or a
+ * database handle appearing in this package is a design error, not a shortcut.
+ *
+ * Contents by phase:
+ *   Phase 4 — normalize/  sanitisation, CanonicalEvent construction
+ *   Phase 4 — cluster/    three-stage deduplication
+ *   Phase 5 — score/      importance, brand relevance, confidence, the rule gate
+ *   Phase 6 — analyze/    prompt assembly and AI orchestration
+ *   Phase 7 — strategy/   X options, DON'T POST, experiment generator
+ *   Phase 9 — trends/     trend lifecycle model
+ */
+
+export const PACKAGE_NAME = '@signal-desk/core';

@@ -1,0 +1,125 @@
+name: CI
+
+# WORKING-DISCIPLINE.md — "NO GREEN CI = NO NEXT PHASE."
+#
+# This workflow runs with NO SECRETS CONFIGURED. That is a deliberate property, not
+# an oversight: it proves MOCK mode genuinely works end to end, and it means a fork
+# or a future contributor can run everything. The single job in this repository that
+# holds a credential is the scheduled live smoke test, which lives in its own
+# workflow and whose failure is a warning rather than a merge blocker.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Explicit rather than inherited. A CI run that silently picked up LIVE from
+  # somewhere would spend money and produce results nobody could reproduce.
+  DATA_MODE: MOCK
+  AI_MODE: MOCK
+  X_MODE: MOCK
+  TZ: Europe/Istanbul
+
+jobs:
+  verify:
+    name: verify (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 is the version ARCHITECTURE.md §2 targets. 24 is what the operator's
+        # machine runs; testing both is what stops "works locally" from being a
+        # separate state to the build.
+        node: ['22', '24']
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install
+        # --frozen-lockfile enforces the committed lockfile (THREAT-MODEL.md §T-5).
+        run: pnpm install --frozen-lockfile
+
+      - name: Format
+        run: pnpm run format:check
+
+      - name: Lint
+        # Zero errors AND zero warnings. A warning nobody must fix is not a signal.
+        run: pnpm exec eslint . --max-warnings=0
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm run test:coverage
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Config validation
+        # The committed .env.example must still satisfy the schema and must still
+        # describe an all-MOCK, zero-credential system.
+        run: pnpm run check:env:ci
+
+      - name: Worker smoke test (no credentials, MOCK mode)
+        # ROADMAP.md Phase 1 exit criteria: the operator must be able to actually run
+        # it. Proving the built artifact starts and exits cleanly is the CI half of
+        # that; a green unit test over the same code is not the same claim.
+        run: node apps/worker/dist/index.js
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # gitleaks needs history to scan commits, not just the working tree.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Secret scan (gitleaks)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        # The binary is downloaded and pinned rather than run through a third-party
+        # action. A marketplace action is itself a supply-chain dependency, and this
+        # is the job whose whole purpose is supply-chain and credential hygiene.
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks version
+          /tmp/gitleaks detect --source . --redact --verbose --no-banner
+
+      - name: Dependency audit
+        # WORKING-DISCIPLINE.md gates this at zero high/critical advisories.
+        run: pnpm audit --audit-level=high

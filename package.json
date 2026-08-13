@@ -1,0 +1,43 @@
+{
+  "name": "signal-desk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-time AI/software/technology intelligence and personal authority operations console for one technical operator.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "verify": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "tsc -b && tsc -p tsconfig.lint.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc -b && pnpm --filter @signal-desk/web run build",
+    "clean": "tsc -b --clean && rm -rf apps/web/.next coverage",
+    "check:env": "tsx apps/worker/src/cli/check-env.ts",
+    "check:env:ci": "tsx apps/worker/src/cli/check-env.ts --ci",
+    "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
+    "db:migrate": "tsx apps/worker/src/cli/migrate.ts",
+    "worker": "node apps/worker/dist/index.js",
+    "worker:dev": "tsx apps/worker/src/index.ts",
+    "web:dev": "pnpm --filter @signal-desk/web run dev"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "tsx": "^4.20.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}
