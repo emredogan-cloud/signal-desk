@@ -949,7 +949,17 @@ as confidence falls.
 
 ---
 
-## ☐ Phase 8 — Educational content engine
+## ◐ Phase 8 — Educational content engine
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-8-complete`. 857 tests, CI green.
+>
+> The one non-negotiable is met and **enforced in code**: an opportunity that cannot
+> state its limitations is not emitted at all.
+>
+> **`PENDING-ELAPSED`:** "≥1 usable educational opportunity per day over a two-week
+> run". **`PENDING-OPERATOR`:** "≥5 experiments the operator judges genuinely runnable
+> in under 2 hours", and the exit criterion that he has run one end to end.
+> **`PENDING-CREDENTIALS`:** confirming the Batch API discount against a real batch.
 
 **OBJECTIVE** Identify one or two genuine teaching opportunities per day, with the exact method,
 worked example, and stated limitations.
@@ -985,6 +995,53 @@ procedures are concrete enough to execute (checked by human review of a sample).
 **EXIT CRITERIA** Above + the operator has actually run one generated experiment end to end.
 
 **ROLLBACK** Additive.
+
+### Phase 8 outcome — 2026-08-13
+
+| Acceptance criterion                                       | Result                                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| ≥1 usable educational opportunity per day over two weeks   | ⏳ **PENDING-ELAPSED**                                                                     |
+| **Every technique includes limitations and failure modes** | ✅ enforced in code — an opportunity with none is not emitted                              |
+| ≥5 experiments judged genuinely runnable in under 2 hours  | ⏳ **PENDING-OPERATOR** — the generator caps at 120 minutes and a test asserts it          |
+| Batch API path confirmed working at reduced cost           | ◐ wired and tested against a fake client; the **measured** saving is `PENDING-CREDENTIALS` |
+
+**Why the limitations rule is a code path, not a prompt instruction.** The roadmap
+says "a workflow presented without its failure cases is the kind of content that
+damages credibility when a reader tries it". A field that is _usually_ filled is a
+field that will one day be empty, so `buildEducationalOpportunity` returns `undefined`
+rather than a lesson someone could follow into a wall. The limitations are generic per
+angle and specific per event: the angle contributes the technique's real failure mode,
+and `stillUnknown` and `doNotSay` from the Phase 6 analysis contribute the rest.
+
+**The experiment generator never produces a `result` field.** The system proposes the
+experiment; the operator runs it and fills the result in. A generated result is a
+fabricated measurement, which is the one thing this project does not do — and a test
+asserts the key is absent rather than merely empty.
+
+**Every experiment carries a content angle for BOTH outcomes.** An experiment only
+worth writing up when it confirms the hypothesis is one that gets quietly abandoned
+when it does not. "I expected X and got Y" is a more honest post than most, and it is
+one only somebody who ran it can write.
+
+**Batch is a deadline decision, not a cost decision.** Batches complete within 24
+hours, which is fine for the nightly educational sweep and useless for an outage the
+operator wants to post about in twenty minutes. Triage and deep analysis stay
+synchronous; the educational sweep and any post-budget-pause backfill go to batch.
+
+**Results are keyed by `custom_id`, never by position** — `collectBatch` returns a
+`Map` specifically so the correct usage is the only convenient one. Position-based
+matching produces a silent, plausible-looking mis-attribution (analysis for event 40
+stored against event 12), which is worse than a crash. A duplicate `custom_id` is
+refused before submission for the same reason.
+
+**Known gaps carried forward.**
+
+1. Angle detection is regex-driven, so a teaching opportunity phrased unusually is
+   missed. It is explainable and free; Phase 12 can measure what it misses.
+2. The two limitation sources beyond the angle — `stillUnknown` and `doNotSay` — come
+   from Phase 6 analyses, and no event has one yet.
+3. Experiment time estimates (45–90 minutes) are guesses. The operator running one is
+   what turns them into measurements.
 
 ---
 

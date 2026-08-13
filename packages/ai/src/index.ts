@@ -6,3 +6,4 @@ export * from './client.js';
 export * from './mock.js';
 export * from './validate.js';
 export * from './engine.js';
+export * from './batch.js';
