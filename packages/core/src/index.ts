@@ -32,3 +32,4 @@ export * from './strategy/index.js';
 export * from './trends/index.js';
 export * from './alerts/index.js';
 export * from './analytics/index.js';
+export * from './publish/index.js';

@@ -1448,7 +1448,18 @@ earned three high-signal replies.
 
 ---
 
-## ☐ Phase 13 — Live platform integration
+## ◐ Phase 13 — Live platform integration
+
+> **PARTIALLY COMPLETE 2026-08-13.** Tag `phase-13-complete`. 990 tests, CI green.
+>
+> **MEASURED detection latency: p50 11.3h, p75 37.5h, p90 85.2h** over 738 events with
+> real publisher timestamps detected inside a 7-day window.
+>
+> **The T-4 posting control is built and tested but posting is NOT enabled**, and no
+> X credential exists. Nothing has been published, autonomously or otherwise.
+>
+> **`PENDING-CREDENTIALS`:** every live criterion — 7 days live, real spend, live
+> adapter smoke tests.
 
 **OBJECTIVE** Everything running live, end to end, with real credentials and real spend.
 
@@ -1474,6 +1485,66 @@ confirmation flow, including cancellation.
 written into this document.
 
 **ROLLBACK** Every mode has a MOCK setting. Revert per subsystem.
+
+### Phase 13 outcome — 2026-08-13
+
+| Acceptance criterion                                                       | Result                                                                            |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 7 consecutive days live with no unhandled errors                           | ⏳ **PENDING-CREDENTIALS**                                                        |
+| Real costs within both ceilings, actuals recorded                          | ⏳ **PENDING-CREDENTIALS** — no spend has occurred                                |
+| Detection latency measured against ≥10 events with known publication times | ✅ **738 events. p50 11.3h, p75 37.5h, p90 85.2h, p99 165.4h**                    |
+| No post can be sent without explicit confirmation showing final text       | ✅ built, tested, and **structural rather than conditional**                      |
+| Rate limits handled without data loss                                      | ◐ self-limits built and tested; real rate-limit handling is `PENDING-CREDENTIALS` |
+
+**Measured detection latency.** 5,007 events; 4,992 carried a real publisher
+timestamp; 738 of those were detected inside seven days. The other 4,254 were archive
+backfill and say nothing about detection speed, so they are excluded rather than
+averaged in — including them would have produced a far worse number that measured the
+archives instead of the system. The 15 events with no publisher timestamp are also
+excluded: their `occurredAt` is an estimate, and a latency computed from an estimate
+measures the estimate.
+
+| percentile   | hours | reads as |
+| ------------ | ----: | -------- |
+| p50 (median) |  11.3 | same day |
+| p75          |  37.5 | 1.6 days |
+| p90          |  85.2 | 3.5 days |
+| p99          | 165.4 | 6.9 days |
+
+These come from a **backfill run, not continuous polling**. A live schedule would
+detect faster; that number is not in hand and is not guessed at here.
+`detected → actionable` needs the analysis tier, which needs credentials.
+
+**The T-4 control is structural, not a setting.** §T-4 says "this is a design property,
+not a setting", and the implementation takes that literally:
+
+- `prepare()` returns the exact bytes plus a hash of them; `authorise()` accepts only a
+  token matching **the bytes actually being sent**. A caller that skipped the display
+  step cannot produce a valid token, so "forgot to confirm" and "deliberately bypassed"
+  both fail closed.
+- The token is checked against the outgoing bytes rather than the prepared ones, which
+  closes the substitution gap: if a bug, a race, or a compromised analysis alters the
+  text after review, the hash no longer matches. The operator confirmed _those bytes_.
+- `authorise()` **throws** rather than returning a boolean. A boolean invites
+  `if (ok) send()` with an else branch somebody forgets to write; for a control whose
+  failure mode is "the account is gone", failing loudly is the right default.
+- There is no `postNow`, no `autoPublish`, no scheduler, and no retry — a retry is a
+  second send the operator authorised once. A test asserts the module contains no
+  `fetch(` and no API host.
+- `X_ENABLE_POSTING` is necessary and never sufficient; both conditions are tested
+  independently.
+
+**Nothing has been posted.** Posting is disabled, no X credential is configured, and
+the write scope §T-4 gates on this phase has not been requested.
+
+**Known gaps carried forward.**
+
+1. The confirmation control is a library with no caller. Wiring it to a CLI or the
+   dashboard is deliberately deferred until credentials exist — a publish button with
+   no possible publish is a trap for a future reader.
+2. `MIN_MINUTES_BETWEEN_POSTS` and `X_MAX_POSTS_PER_DAY` are guesses.
+3. Latency is measured from one backfill run. A continuous-polling figure is the one
+   that matters and it does not exist yet.
 
 ---
 

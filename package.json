@@ -39,7 +39,8 @@
     "strategy": "tsx --conditions=development apps/worker/src/cli/strategy.ts",
     "trend": "tsx --conditions=development apps/worker/src/cli/trend.ts",
     "alerts": "tsx --conditions=development apps/worker/src/cli/alerts.ts",
-    "replay": "tsx --conditions=development apps/worker/src/cli/replay.ts"
+    "replay": "tsx --conditions=development apps/worker/src/cli/replay.ts",
+    "latency": "tsx --conditions=development apps/worker/src/cli/latency.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
