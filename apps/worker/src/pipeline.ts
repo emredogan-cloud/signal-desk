@@ -8,6 +8,7 @@ import {
   upsertEventEmbedding,
   recordMergeAudit,
   operatorUnmergedRawItems,
+  eventPrimarySourceCategory,
   unclusteredRawItemIds,
   loadRawItemsWithSource,
   type Db,
@@ -299,15 +300,16 @@ function attachToEvent(
   decision: Extract<ClusterDecision, { kind: 'merge' }>,
   now: Date,
 ): void {
-  const candidates = clusterCandidates(db, new Date(0), 5000);
-  const target = candidates.find((c) => c.eventId === eventId);
-
   // Primary-source selection is by category, not arrival order (ARCHITECTURE.md §5).
   // A journalist's report about a launch is evidence; the launch post is the record —
   // even when the journalist published first.
+  //
+  // One targeted read. This previously loaded every event and all of its evidence on
+  // every merge, which is quadratic and was measured doing real damage.
+  const currentPrimary = eventPrimarySourceCategory(db, eventId);
   const promote =
-    target !== undefined &&
-    shouldReplacePrimary(target.primarySourceCategory as SourceCategory, item.sourceCategory);
+    currentPrimary !== undefined &&
+    shouldReplacePrimary(currentPrimary as SourceCategory, item.sourceCategory);
 
   const attached = attachEvidence(
     db,

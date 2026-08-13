@@ -18,6 +18,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // The pipeline tests cluster ~960 fixture items against a real in-memory SQLite.
+    // 5s is vitest's default and it is comfortable locally and marginal on a CI
+    // runner — which is a bad place for the margin to be, because the failure looks
+    // like flakiness rather than the timing signal it is.
+    testTimeout: 20_000,
     include: ['packages/**/*.test.ts', 'apps/worker/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**'],
     coverage: {

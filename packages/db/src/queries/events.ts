@@ -122,6 +122,24 @@ export function findEventByUrlOrHash(
   return row?.eventId;
 }
 
+/**
+ * The source category of an event's current primary evidence.
+ *
+ * A targeted query, because the alternative was measured and is bad: the pipeline
+ * used to call `clusterCandidates(db, new Date(0), 5000)` on **every merge** — every
+ * event, joined to every evidence row — purely to read this one field. That is
+ * quadratic in the number of events, and it is what made clustering 962 fixture
+ * items exceed a 5-second test timeout on CI while passing locally.
+ */
+export function eventPrimarySourceCategory(db: Db, eventId: number): string | undefined {
+  return db
+    .select({ category: sources.category })
+    .from(events)
+    .innerJoin(sources, eq(sources.id, events.primarySourceId))
+    .where(eq(events.id, eventId))
+    .get()?.category;
+}
+
 export type CreateEventInput = {
   readonly title: string;
   readonly summary: string;
