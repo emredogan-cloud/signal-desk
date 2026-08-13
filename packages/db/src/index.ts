@@ -26,3 +26,4 @@ export * from './queries/trends.js';
  * so unambiguously.
  */
 export const MIGRATIONS_FOLDER = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+export * from './backup.js';

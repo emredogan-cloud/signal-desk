@@ -1548,7 +1548,17 @@ the write scope §T-4 gates on this phase has not been requested.
 
 ---
 
-## ☐ Phase 14 — Security, observability, and hardening
+## ◐ Phase 14 — Security, observability, and hardening
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-14-complete`. 1,000 tests, CI green.
+>
+> **`pnpm security` exercises every automatable §5 control against the LIVE system and
+> reports 6/6**, exiting non-zero on any failure so it can gate a release.
+>
+> **Zero dependency advisories at any severity.**
+>
+> **`PENDING-CREDENTIALS`:** the rotation drill for all three vendors and the
+> least-privilege token review. Both need tokens that do not exist.
 
 **OBJECTIVE** Close every control in `THREAT-MODEL.md` §4 and exercise the runbooks.
 
@@ -1567,6 +1577,64 @@ a clean path; incident runbook written.
 - [ ] Log redaction verified against a planted synthetic secret
 
 **EXIT CRITERIA** Above.
+
+### Phase 14 outcome — 2026-08-13
+
+| Acceptance criterion                                                   | Result                                                                              |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Every security test in §5 passes                                       | ✅ **6/6 via `pnpm security`**, run against the live system rather than fixtures    |
+| Rotation performed for Anthropic, X, and GitHub with recorded downtime | ⏳ **PENDING-CREDENTIALS** — no vendor credential exists to rotate                  |
+| Backup restored successfully to a clean environment                    | ✅ 65MB backup, `integrity_check ok`, 5,007 events and 5,208 evidence rows restored |
+| No high or critical dependency advisories                              | ✅ **zero at any severity**, including the moderate one                             |
+| Every token verified least-privilege                                   | ⏳ **PENDING-CREDENTIALS**                                                          |
+| Log redaction verified against a planted synthetic secret              | ✅ planted `sk-ant-api03-…` key does not appear in the logger's output              |
+
+**Why `pnpm security` exists alongside the unit tests.** The unit tests prove each
+control works in isolation. This proves they are **wired up** — and a redaction
+function that works and is never called by the logger passes every unit test and leaks
+anyway. Running against the live database and the real logger is the difference.
+
+**The redaction check found a real measurement bug in itself.** The first version
+captured output by monkey-patching `process.stdout.write`, and captured nothing: pino
+writes to file descriptor 1 directly, so the Node stream wrapper never sees it. A test
+that captures nothing reports a working redactor as broken — and would report a
+_leaking_ one as fine, which is the dangerous direction. It now uses the logger's own
+`destination` hook.
+
+**Backup uses `VACUUM INTO`, not `cp`.** The database runs in WAL mode, so a plain file
+copy captures the main database without the write-ahead log — a snapshot of a moment
+that never existed as a consistent state. It _usually works_, which is exactly what
+makes it dangerous. `VACUUM INTO` snapshots through SQLite itself.
+
+**Restore verification catches the failure a naive check misses.** An empty database
+passes `integrity_check` and opens fine. Verification therefore checks row counts and
+fails a structurally-valid empty backup explicitly, and restores to a **clean path** —
+a verification that overwrote the live database would, on failure, destroy the thing
+it was protecting.
+
+**A path-resolution bug worth recording.** `backup()` passed `DATABASE_URL` straight to
+`new Database()` and failed with `SQLITE_CANTOPEN`, because the config value carries a
+`file:` form only `databaseFilePath` understands. Two places resolving the same setting
+differently is how a backup silently targets the wrong file — this one failed loudly,
+which was luck rather than design.
+
+**The esbuild advisory.** A moderate advisory (dev-server request forgery) reached the
+tree via `drizzle-kit → @esbuild-kit/core-utils → esbuild@0.18`. It was a
+devDependency and the affected dev server is never run, so it did not violate the
+criterion — but a `pnpm.overrides` entry pinning `esbuild >=0.25.0` removes it
+entirely, and `drizzle-kit generate` still works afterwards. Verified rather than
+assumed.
+
+**Known gaps carried forward.**
+
+1. **Credential rotation has not been drilled.** It cannot be: there are no
+   credentials. The runbook step is real work that is `PENDING-CREDENTIALS`, not work
+   that was skipped.
+2. Backup is a library plus a `pnpm security` invocation; there is **no scheduled
+   backup job**. Scheduling something that has never run unattended would be worse
+   than not scheduling it.
+3. The incident runbook is not written. It should describe responses to failures that
+   have not happened yet on a system that has not run in production.
 
 ---
 
