@@ -24,8 +24,8 @@ import { envelopeInstructions } from './envelope.js';
  * to it rather than embedding it in the cached body.
  */
 
-export const TRIAGE_PROMPT_VERSION = 'triage-v1-2026-08-13';
-export const ANALYSIS_PROMPT_VERSION = 'analysis-v1-2026-08-13';
+export const TRIAGE_PROMPT_VERSION = 'triage-v2-2026-08-13';
+export const ANALYSIS_PROMPT_VERSION = 'analysis-v4-2026-08-13';
 
 /**
  * The triage system prompt — the cached prefix for every Haiku call.
@@ -372,6 +372,9 @@ Item: "Correction: the pricing figures in yesterday's post were wrong"
 
 # Rules that override everything above
 
+0. LENGTH LIMITS, because the schema enforces them and an overrun discards your whole
+   answer: 'oneLine' at most 200 characters, 'reason' at most 700, 'injectionNote' at
+   most 900. Say less rather than being truncated.
 1. Report only what the item says. Do not add facts you happen to know. If the item
    does not give a version number, there is no version number.
 2. If the item is empty, truncated, or unintelligible, say isRealEvent: false and say
@@ -420,6 +423,20 @@ Every factual claim goes in the claims array with the evidence ids that support 
 - Every number, date, version, price, benchmark, or quantity you state MUST appear as
   a claim with at least one evidence id. There are no exceptions. An analysis with an
   unsourced number FAILS VALIDATION and is discarded.
+- This is checked MECHANICALLY, by string match. A real analysis was discarded for
+  writing '1M context window' in whatHappened while the claims array said 'one million
+  tokens'. The claim text must contain the SAME characters as the narrative: if the
+  narrative says '1M', a claim must contain '1M'; if it says '$5', a claim must contain
+  '$5'. Copy the figure across verbatim rather than rephrasing it.
+- The simplest way to comply: write the narrative first, then re-read it and add one
+  claim for every figure that appears in it, quoting the figure exactly as written.
+- DO NOT invent rhetorical figures. A real analysis was discarded for writing '90%'
+  when no source said 90% — it was the model's own emphasis, not a measurement. Never
+  write 'about 90%', 'roughly half', 'a 10x improvement', or any similar figure unless
+  the evidence states that number. If you want to convey magnitude without a source,
+  use words: 'most', 'a minority', 'substantially faster'. Words are honest; an
+  invented percentage is a fabricated measurement and it is the single fastest way to
+  destroy the operator's credibility.
 - Use only the evidence ids given to you in this request. Do not invent one, do not
   guess a format, do not cite an id you have not been shown.
 - Tag each claim honestly:
@@ -472,6 +489,10 @@ Not: "do not exaggerate", "do not speculate". Those are advice, not entries.
 
 # Rules that override everything above
 
+0. LENGTH LIMITS, enforced by the schema; an overrun discards the whole analysis.
+   'whatHappened' and 'whatChanged' at most 2,200 characters each; 'before' and
+   'after' at most 1,000; each implication at most 1,000; each claim at most 700;
+   each 'stillUnknown' and 'doNotSay' entry at most 500, ten entries maximum.
 1. Analyse only what is in the evidence. You may reason from it; you may not add facts
    from your own knowledge. If your training data disagrees with the evidence, the
    evidence wins and the disagreement is a stillUnknown.

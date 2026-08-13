@@ -68,8 +68,33 @@ export const NO_USAGE: TokenUsage = {
  *
  * Cache writes are billed at 1.25× base input for the 5-minute TTL. Reads are ~0.1×.
  */
+/**
+ * Resolve a returned model id to a pricing entry.
+ *
+ * The API returns **dated** ids — `claude-haiku-4-5-20251001` — while the pricing
+ * table is keyed by the alias the request used. The first live run therefore priced
+ * every call at `undefined`, the caller coalesced that to 0, and **real spend was
+ * recorded as $0.00 while 8,764 cache-read tokens were actually billed**. The budget
+ * guard would never have fired.
+ *
+ * Longest-prefix match rather than exact: a new dated snapshot of a known model must
+ * price correctly the day it ships, not the day someone notices the ledger is flat.
+ */
+function priceFor(model: string): { input: number; output: number; cacheRead: number } | undefined {
+  const exact = MODEL_PRICING[model];
+  if (exact !== undefined) return exact;
+
+  let best:
+    { key: string; price: { input: number; output: number; cacheRead: number } } | undefined;
+  for (const [key, price] of Object.entries(MODEL_PRICING)) {
+    if (!model.startsWith(key)) continue;
+    if (best === undefined || key.length > best.key.length) best = { key, price };
+  }
+  return best?.price;
+}
+
 export function callCostUsd(model: string, usage: TokenUsage): number | undefined {
-  const price = MODEL_PRICING[model];
+  const price = priceFor(model);
   if (price === undefined) return undefined;
 
   return (
@@ -172,7 +197,7 @@ export function estimateCostUsd(
   promptChars: number,
   maxOutputTokens: number,
 ): number {
-  const price = MODEL_PRICING[model];
+  const price = priceFor(model);
   // An unknown model prices as the most expensive known one rather than as free.
   const rate = price ?? { input: 5.0, output: 25.0, cacheRead: 0.5 };
   const inputTokens = promptChars / 3.5; // conservative chars-per-token

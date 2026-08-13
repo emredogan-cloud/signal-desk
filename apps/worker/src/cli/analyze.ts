@@ -179,12 +179,18 @@ async function main(): Promise<number> {
       rows.push(...toRows(result));
       spent += result.totalCostUsd;
       analysed += 1;
-      if (result.analysis.status === 'ok') {
-        // Cache-hit accounting only counts LIVE calls. Counting MOCK runs would let
-        // a credential-free CI run "prove" the cache works, which it cannot.
-        if (aiMode === 'LIVE') {
+      // Count EVERY stage that actually issued a request, not just successful deep
+      // analyses. The first live run reported "0 successful calls — too few to
+      // demonstrate a hit" while the ledger showed 8,764 cache-read tokens, because
+      // this only looked at the analysis stage and every analysis had been skipped.
+      //
+      // MOCK runs are excluded: letting a credential-free CI run "prove" the cache
+      // works would be exactly the fabricated-result failure the project forbids.
+      if (aiMode === 'LIVE') {
+        for (const stage of [result.triage, result.analysis]) {
+          if (stage.status === 'skipped') continue;
           cacheEligible += 1;
-          if (result.cacheRead) cacheHits += 1;
+          if (stage.usage.cacheReadTokens > 0) cacheHits += 1;
         }
       }
     }

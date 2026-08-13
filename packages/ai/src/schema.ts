@@ -33,7 +33,7 @@ export type RecommendedAction = (typeof RECOMMENDED_ACTIONS)[number];
  */
 export const claimSchema = z
   .object({
-    text: z.string().min(1).max(500),
+    text: z.string().min(1).max(800),
     evidenceIds: z.array(z.string().min(1)).min(1),
     tag: z.enum(EVIDENCE_TAGS),
   })
@@ -41,15 +41,35 @@ export const claimSchema = z
 
 export type Claim = z.infer<typeof claimSchema>;
 
+/**
+ * Length bounds are HYGIENE, not security — and the first live run showed the
+ * difference matters.
+ *
+ * `reason` was capped at 300 characters. Two of six real Haiku calls wrote 320-odd
+ * characters of perfectly good reasoning, Zod rejected the whole object, and a triage
+ * verdict **that had already been paid for** was discarded. The model had no way to
+ * know: structured outputs do not carry `maxLength`, so the bound was invisible to it
+ * and fatal to us.
+ *
+ * The fix is both halves. The prompt now states the limits, and the bounds are
+ * generous enough that a slight overrun does not throw away paid work. Rejection is
+ * reserved for things that actually matter — schema shape, evidence ids, provenance —
+ * not for prose that ran long.
+ *
+ * `oneLine` stays tight at 200: it is a headline, and a headline that runs long is
+ * wrong rather than merely verbose.
+ */
+export const MAX_REASON_CHARS = 800;
+
 export const triageSchema = z
   .object({
     isRealEvent: z.boolean(),
     category: z.enum(EVENT_CATEGORIES),
     oneLine: z.string().min(1).max(200),
     worthDeepAnalysis: z.boolean(),
-    reason: z.string().min(1).max(300),
+    reason: z.string().min(1).max(MAX_REASON_CHARS),
     injectionObserved: z.boolean(),
-    injectionNote: z.string().max(500),
+    injectionNote: z.string().max(1000),
   })
   .strict();
 
@@ -57,23 +77,23 @@ export type TriageResult = z.infer<typeof triageSchema>;
 
 export const analysisSchema = z
   .object({
-    whatHappened: z.string().min(1).max(1200),
-    whatChanged: z.string().min(1).max(1200),
-    before: z.string().max(600),
-    after: z.string().max(600),
+    whatHappened: z.string().min(1).max(2500),
+    whatChanged: z.string().min(1).max(2500),
+    before: z.string().max(1200),
+    after: z.string().max(1200),
     implications: z
       .array(
         z
           .object({
             audience: z.string().min(1).max(80),
-            implication: z.string().min(1).max(600),
+            implication: z.string().min(1).max(1200),
           })
           .strict(),
       )
       .max(6),
     claims: z.array(claimSchema).max(20),
     /** What is NOT known. An analysis with no unknowns is usually overconfident. */
-    stillUnknown: z.array(z.string().min(1).max(300)).max(8),
+    stillUnknown: z.array(z.string().min(1).max(600)).max(10),
     confidence: z.enum(CONFIDENCE_LEVELS),
     recommendedAction: z.enum(RECOMMENDED_ACTIONS),
     /**
@@ -84,9 +104,9 @@ export const analysisSchema = z
      * credibility. Generated *with* the analysis because that is when the tempting
      * overstatements are visible.
      */
-    doNotSay: z.array(z.string().min(1).max(300)).max(8),
+    doNotSay: z.array(z.string().min(1).max(600)).max(10),
     injectionObserved: z.boolean(),
-    injectionNote: z.string().max(500),
+    injectionNote: z.string().max(1000),
   })
   .strict();
 

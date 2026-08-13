@@ -41,7 +41,8 @@
     "alerts": "tsx --conditions=development apps/worker/src/cli/alerts.ts",
     "replay": "tsx --conditions=development apps/worker/src/cli/replay.ts",
     "latency": "tsx --conditions=development apps/worker/src/cli/latency.ts",
-    "security": "tsx --conditions=development apps/worker/src/cli/security.ts"
+    "security": "tsx --conditions=development apps/worker/src/cli/security.ts",
+    "redteam": "tsx --conditions=development apps/worker/src/cli/redteam.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -14,7 +14,12 @@ import {
   type TriageResult,
 } from './schema.js';
 import { complete, AiRefusalError, type CompletionResult } from './client.js';
-import { validateAnalysis, validateTriage, type ValidationContext } from './validate.js';
+import {
+  validateAnalysis,
+  validateTriage,
+  ProvenanceError,
+  type ValidationContext,
+} from './validate.js';
 import { MOCK_MODEL, MOCK_USAGE, mockAnalysis, mockTriage } from './mock.js';
 import {
   callCostUsd,
@@ -110,6 +115,20 @@ function skipped<T>(
     model,
     promptVersion,
   };
+}
+
+/**
+ * A failure description that can actually be diagnosed.
+ *
+ * The first live run stored `"triage output did not match the schema"` and nothing
+ * else — true, and useless. `ProvenanceError` carries the Zod detail; a validation
+ * failure recorded without it is one nobody can fix from the ledger.
+ */
+function describeFailure(error: unknown): string {
+  if (error instanceof ProvenanceError) {
+    return `${error.message}: ${error.detail.slice(0, 400)}`;
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 /** Bound the user turn so one enormous document cannot blow the budget on its own. */
@@ -218,7 +237,7 @@ export async function runTriage(
     return {
       status: 'failed',
       value: undefined,
-      reason: error instanceof Error ? error.message : String(error),
+      reason: describeFailure(error),
       usage: result.usage,
       costUsd: cost,
       model: result.model,
@@ -280,7 +299,12 @@ export async function runAnalysis(
       systemDynamic: framingBlock(delimiter),
       userContent: user,
       jsonSchema: ANALYSIS_JSON_SCHEMA,
-      maxTokens: 4000,
+      // 16k, not 4k. Claude Opus 5 thinks by DEFAULT, and `max_tokens` caps thinking
+      // plus response text together — so a 4k budget spent most of itself reasoning
+      // and truncated the JSON mid-object. The failure surfaced as "response was not
+      // valid JSON despite structured outputs", which reads like a schema problem and
+      // is actually a budget one.
+      maxTokens: 16_000,
       effort: 'medium',
     });
   } catch (error) {
@@ -321,7 +345,7 @@ export async function runAnalysis(
     return {
       status: 'failed',
       value: undefined,
-      reason: error instanceof Error ? error.message : String(error),
+      reason: describeFailure(error),
       usage: result.usage,
       costUsd: cost,
       model: result.model,

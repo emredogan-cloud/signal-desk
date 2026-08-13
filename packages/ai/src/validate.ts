@@ -119,13 +119,22 @@ export function validateAnalysis(raw: unknown, context: ValidationContext): Anal
   const narrative = [analysis.whatHappened, analysis.whatChanged, analysis.before, analysis.after];
   const claimText = analysis.claims.map((claim) => claim.text).join(' ');
 
+  // Compare on DIGITS ONLY, so "27,674" in a claim satisfies "27674" in the narrative.
+  //
+  // A live analysis was discarded because the two differed by a thousands separator —
+  // the figure was sourced, and the check was comparing presentation rather than
+  // value. This preserves the security property exactly (an unsourced number still
+  // fails) while removing a purely cosmetic mismatch that costs a paid analysis.
+  const digitsOf = (value: string): string => value.replace(/[,_\s]/g, '');
+  const claimDigits = digitsOf(claimText);
+
   for (const field of narrative) {
     if (!containsFactualNumber(field)) continue;
     const numbers = field.match(new RegExp(FACTUAL_NUMBER, 'gi')) ?? [];
     for (const number of numbers) {
       const trimmed = number.trim();
       if (trimmed.length === 0) continue;
-      if (!claimText.includes(trimmed)) {
+      if (!claimDigits.includes(digitsOf(trimmed))) {
         throw new ProvenanceError(
           'analysis states a number that no sourced claim supports',
           `"${trimmed}" appears in the narrative but in no claim with an evidence id (THREAT-MODEL §5 test 6)`,

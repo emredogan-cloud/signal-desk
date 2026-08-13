@@ -54,7 +54,11 @@ describe('parseConfig — valid environments', () => {
     expect(config.AI_TRIAGE_MODEL).toBe('claude-haiku-4-5');
     expect(config.AI_ANALYSIS_MODEL).toBe('claude-opus-5');
     expect(config.AI_DAILY_BUDGET_USD).toBe(2.0);
-    expect(config.AI_ANALYSIS_THRESHOLD).toBe(70);
+    // 50, not 70. Changed from measurement on 2026-08-13: the highest combined score
+    // over 5,007 real events is 66, so a threshold of 70 made the expensive tier
+    // unreachable by construction — and it looked exactly like a system correctly
+    // finding nothing worth analysing.
+    expect(config.AI_ANALYSIS_THRESHOLD).toBe(50);
     expect(config.AI_USE_BATCH_FOR_NON_URGENT).toBe(true);
     expect(config.X_DAILY_BUDGET_USD).toBe(0.5);
     expect(config.X_ENABLE_POSTING).toBe(false);
@@ -87,7 +91,11 @@ describe('parseConfig — valid environments', () => {
   it('treats a blank value for a defaulted variable as absent rather than invalid', () => {
     const config = parseConfig({ LOG_LEVEL: '', AI_ANALYSIS_THRESHOLD: '   ', TZ: '' });
     expect(config.LOG_LEVEL).toBe('info');
-    expect(config.AI_ANALYSIS_THRESHOLD).toBe(70);
+    // 50, not 70. Changed from measurement on 2026-08-13: the highest combined score
+    // over 5,007 real events is 66, so a threshold of 70 made the expensive tier
+    // unreachable by construction — and it looked exactly like a system correctly
+    // finding nothing worth analysing.
+    expect(config.AI_ANALYSIS_THRESHOLD).toBe(50);
     expect(config.TZ).toBe('Europe/Istanbul');
   });
 

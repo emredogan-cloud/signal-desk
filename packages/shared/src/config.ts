@@ -55,7 +55,31 @@ export const configSchema = z.object({
   AI_TRIAGE_MODEL: withDefault(z.string().min(1), 'claude-haiku-4-5'),
   AI_ANALYSIS_MODEL: withDefault(z.string().min(1), 'claude-opus-5'),
   AI_DAILY_BUDGET_USD: withDefault(z.coerce.number().nonnegative().finite(), 2.0),
-  AI_ANALYSIS_THRESHOLD: withDefault(z.coerce.number().min(0).max(100), 70),
+  /**
+   * Combined score at or above which an event may reach the expensive model.
+   *
+   * **Changed from 70 to 50 on 2026-08-13, from measurement rather than preference.**
+   *
+   * 70 was set in Phase 1, before any score existed. Measured over 5,007 real events
+   * the highest combined score is **66**, so the expensive tier was unreachable by
+   * construction — the system would never have deep-analysed anything, and it looked
+   * exactly like a system correctly finding nothing worth analysing.
+   *
+   * The evidence for 50, over the 65 gate survivors (max 66, median 43):
+   *
+   *   | threshold | candidates by score | measured outcome                    |
+   *   |-----------|--------------------:|-------------------------------------|
+   *   | 70        |                   0 | tier unreachable                    |
+   *   | 60        |                   2 | too tight to exercise triage        |
+   *   | **50**    |               **7** | 2 Opus calls / 30 events, $0.32     |
+   *   | 45        |                  26 | ~$1.60/day, at the budget ceiling   |
+   *
+   * 50 leaves the cheap triage stage as the actual judge — which is the design — while
+   * keeping a floor against triage being over-eager, and lands well inside
+   * `AI_DAILY_BUDGET_USD`. It is still a threshold over unfitted weights: when Phase 12
+   * refits them the scale moves and this number must be re-measured, not preserved.
+   */
+  AI_ANALYSIS_THRESHOLD: withDefault(z.coerce.number().min(0).max(100), 50),
   AI_USE_BATCH_FOR_NON_URGENT: withDefault(booleanish, true),
 
   // ─── X ──────────────────────────────────────────────────────────────
