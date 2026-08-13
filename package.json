@@ -33,7 +33,8 @@
     "cluster": "tsx --conditions=development apps/worker/src/cli/cluster.ts",
     "embeddings:warm": "tsx --conditions=development apps/worker/src/cli/warm-embeddings.ts",
     "labelled:build": "tsx --conditions=development apps/worker/src/cli/build-labelled-set.ts",
-    "measure:dedup": "tsx --conditions=development apps/worker/src/cli/measure-dedup.ts"
+    "measure:dedup": "tsx --conditions=development apps/worker/src/cli/measure-dedup.ts",
+    "score": "tsx --conditions=development apps/worker/src/cli/score.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

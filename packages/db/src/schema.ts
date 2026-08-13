@@ -12,6 +12,8 @@ import {
   SOURCE_PLATFORMS,
   ENTITY_KINDS,
   EVENT_CATEGORIES,
+  CONFIDENCE_LEVELS,
+  EVIDENCE_TAGS,
 } from '@signal-desk/shared';
 
 /**
@@ -447,3 +449,53 @@ export type EvidenceRow = typeof evidence.$inferSelect;
 export type NewEvidenceRow = typeof evidence.$inferInsert;
 export type EventEmbeddingRow = typeof eventEmbeddings.$inferSelect;
 export type MergeAuditRow = typeof mergeAudit.$inferSelect;
+
+/**
+ * Score history. ARCHITECTURE.md §7: "Score history — scores change as evidence
+ * accumulates; keep the series."
+ *
+ * Append-only, like `raw_items`. An event scored 41 on Monday and 78 on Wednesday
+ * because four more sources arrived is a *fact about detection latency*, and
+ * overwriting the 41 destroys it. Phase 12 needs the series to answer "would the new
+ * weights have surfaced this sooner", which is the entire point of the refit.
+ */
+export const eventScores = sqliteTable(
+  'event_scores',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+
+    importance: integer('importance').notNull(),
+    brandRelevance: integer('brand_relevance').notNull(),
+    velocity: integer('velocity').notNull(),
+    combined: integer('combined').notNull(),
+    confidence: text('confidence', { enum: CONFIDENCE_LEVELS }).notNull(),
+    evidenceTag: text('evidence_tag', { enum: EVIDENCE_TAGS }).notNull(),
+
+    /** The full component breakdown, as rendered. An operator who cannot see why
+     *  something scored 82 will not trust the number (ROADMAP.md Phase 5). */
+    breakdown: text('breakdown', { mode: 'json' }).$type<unknown>().notNull(),
+    /** Caps that fired. Non-empty means a rule overrode the arithmetic. */
+    caps: text('caps', { mode: 'json' }).$type<string[]>().notNull(),
+
+    /** Gate outcome, stored so the kill rate is measurable after the fact. */
+    gatePassed: integer('gate_passed', { mode: 'boolean' }).notNull(),
+    gateKilledBy: text('gate_killed_by'),
+    gateReason: text('gate_reason').notNull(),
+
+    /** Which version of the scorer produced this. Bumped when weights change, so a
+     *  Phase-12 refit can compare like with like instead of silently mixing eras. */
+    scoredWith: text('scored_with').notNull(),
+    scoredAt: timestamp('scored_at').notNull(),
+  },
+  (table) => [
+    index('event_scores_event_idx').on(table.eventId, table.scoredAt),
+    index('event_scores_combined_idx').on(table.combined),
+    index('event_scores_gate_idx').on(table.gatePassed),
+  ],
+);
+
+export type EventScoreRow = typeof eventScores.$inferSelect;
+export type NewEventScoreRow = typeof eventScores.$inferInsert;

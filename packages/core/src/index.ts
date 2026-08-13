@@ -26,3 +26,4 @@ export * from './cluster/dedup.js';
 export * from './cluster/embedder.js';
 export * from './cluster/labelled-fixtures.js';
 export * from './cluster/measure.js';
+export * from './score/index.js';

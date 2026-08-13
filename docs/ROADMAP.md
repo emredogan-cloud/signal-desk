@@ -608,7 +608,18 @@ labelled set as a regression case.
 
 ---
 
-## ☐ Phase 5 — Scoring: importance, brand relevance, confidence
+## ◐ Phase 5 — Scoring: importance, brand relevance, confidence
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-5-complete`. Three of four acceptance
+> criteria met and measured. 565 tests, CI green.
+>
+> **Measured gate kill rate: 98.7% overall, 91.5% excluding the staleness rule**
+> (target ≥85%). Both reported, because one would mislead — see the outcome below.
+>
+> **Outstanding: `PENDING-OPERATOR`** — "Operator reviews the top-20 by importance
+> over a week of real data and agrees the ordering is defensible. **This is a human
+> acceptance gate and it is not optional.**" `pnpm score -- --top` prints that list.
+> Engineering continues; the judgment is recorded as outstanding.
 
 **OBJECTIVE** Deterministic, explainable, LLM-free scoring.
 
@@ -648,6 +659,67 @@ of real data.
 review repeats. Shipping a scorer he does not trust makes every later phase worthless.
 
 **ROLLBACK** Scores are derived; recompute.
+
+### Phase 5 outcome — 2026-08-13
+
+| Acceptance criterion                                                  | Result                                                                                                                                                       |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Every score is reproducible and accompanied by a component breakdown  | ✅ every component carries value, weight, contribution, and a readable sentence; stored as JSON in `event_scores.breakdown`                                  |
+| Gate kill rate measured and reported; target ≥85%                     | ✅ **98.7% overall / 91.5% in-window** over 5,007 real events                                                                                                |
+| Confidence capping rules provably cannot be bypassed                  | ✅ exhaustive property test over the entire input space (3 levels × 4 tags × 2³ flags × 4 source counts) asserting the caps are monotonically non-increasing |
+| **Operator reviews the top-20 and agrees the ordering is defensible** | ⏳ **PENDING-OPERATOR** — `pnpm score -- --top`                                                                                                              |
+
+**Measured values.**
+
+| Measurement                             | Value                      |
+| --------------------------------------- | -------------------------- |
+| Events scored                           | 5,007                      |
+| Gate kill rate, overall                 | **98.7%** (4,942 of 5,007) |
+| Gate kill rate, excluding staleness     | **91.5%** (702 of 767)     |
+| Passed to the LLM tier                  | **65 events**              |
+| Killed by staleness                     | 4,240 (84.7%)              |
+| Killed as uncorroborated and unspecific | 643 (12.8%)                |
+| Killed as promotional noise             | 22                         |
+| Killed as GitHub activity chatter       | 20                         |
+
+**The first measurement failed, at 17%.** The cause was visible in the top-20: entries
+from the Vercel changelog archive, some years old, scoring 53 and passing. Recency was
+a score _component_, so an old event lost points and still cleared the floor. But
+`ROADMAP.md` §1 optimises for **EARLY** — "before the conversation moves on" — and no
+score makes a two-year-old changelog entry actionable. **Staleness is a kill rule, not
+a penalty**, and adding it took the rate from 17% to 98.7%.
+
+**Why two kill rates are reported rather than one.** The first ingest backfilled whole
+archives — Vercel alone carries 1,463 entries — so an overall rate is dominated by
+`too_old` and flatters the gate enormously. The in-window figure excludes everything
+staleness killed and is the closer proxy for steady-state daily volume, where almost
+nothing is old. Quoting only 98.7% would be technically true and misleading.
+
+**Two design corrections the tests forced.**
+
+1. **The artifact bonus saturated where it mattered most.** Testability started as
+   `entity + 0.1 if artifact`, and for Anthropic or Supabase the base is already 1.0 —
+   so the bonus did nothing at exactly the top of the list. An Anthropic _policy post_
+   scored identically to a model release. Now it scales: `entity × (artifact ? 1 : 0.6)`.
+2. **Cap explanations are reported only when a cap actually changed something.** A cap
+   firing on an already-capped value did no work, and listing it pads the explanation
+   with rules that changed nothing.
+
+**Known gaps carried forward.**
+
+1. **Every weight in `packages/core/src/score/weights.ts` is an unvalidated guess**, and
+   the file says so at the top of every constant. Phase 12 refits them against measured
+   outcomes. The weights encode _ordering_ claims only — nothing here claims 82 differs
+   meaningfully from 79.
+2. **Velocity remains INFERRED.** The HN/Reddit/GitHub substitute for X velocity is
+   weighted at 0.12 of importance deliberately, so that if Phase 12 discards it the
+   damage to the ordering is bounded. The label travels with the number in the
+   breakdown so it cannot quietly harden into an assumption.
+3. The 65 events that pass the gate include `v2.1.231`-style bare version titles from
+   release atoms. They are real releases and correctly specific, but the title alone is
+   poor reading; Phase 6's analysis is what turns them into something legible.
+4. The `too_old` threshold of 7 days is a guess. It will look different once ingestion
+   has been running continuously rather than backfilling.
 
 ---
 
