@@ -1638,7 +1638,21 @@ assumed.
 
 ---
 
-## ☐ Phase 15 — Production E2E validation
+## ◐ Phase 15 — Production E2E validation
+
+> **EXIT CRITERION MET 2026-08-13.** Tag `phase-15-complete`.
+>
+> The exit criterion is one sentence — _"The validation report exists and is honest."_
+> It exists: **`docs/VALIDATION.md`**. It is written **before** the 30-day run rather
+> than after, and says so in its first paragraph.
+>
+> **No acceptance criterion is met**, and none can be today: 30 days of uptime, ≥20
+> published posts with attributed outcomes, and the operator's own verdict all require
+> time, credentials, or him. Each is listed as outstanding rather than explained away.
+>
+> The report's longest section is **§6, what the system does badly** — thirteen items,
+> ordered by how much they matter, carried forward as the next backlog exactly as the
+> roadmap asks.
 
 **OBJECTIVE** Prove the system works, and write down honestly where it does not.
 
@@ -1657,6 +1671,25 @@ prompt-injection defense, rate limits, API resilience, observability, and real-w
 - [ ] **A written list of what the system does badly**, carried forward as the next backlog
 
 **EXIT CRITERIA** The validation report exists and is honest.
+
+### Phase 15 outcome — 2026-08-13
+
+| Acceptance criterion                                                              | Result                                                                                       |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 30 days continuous operation with uptime recorded                                 | ⏳ **PENDING-ELAPSED**                                                                       |
+| Detection latency, dedup precision/recall, alert precision, and cost measured     | ◐ **latency and dedup measured**; alert precision needs the operator, cost needs credentials |
+| ≥20 posts published through the system's recommendations with outcomes attributed | ⏳ **PENDING-OPERATOR** — nothing has been published                                         |
+| The operator states plainly whether it saved him time                             | ⏳ **PENDING-OPERATOR**                                                                      |
+| **A written list of what the system does badly**                                  | ✅ **`docs/VALIDATION.md` §6 — thirteen items**                                              |
+| _(exit)_ The validation report exists and is honest                               | ✅                                                                                           |
+
+**The headline, from the report:** the system is built and runs end to end without
+credentials; it has never run in production, never called a real model, and published
+nothing. Its rankings rest on guesses that the machinery to replace is built but cannot
+yet run.
+
+**The one line worth carrying forward:** _"The system is ready to be tried. It is not
+validated."_
 
 ---
 

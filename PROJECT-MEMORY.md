@@ -328,7 +328,7 @@ Full detail in `docs/ENV-HANDBOOK.md`. Run `pnpm check:env` for live state.
 
 ## J. Test state
 
-**879 tests, 25 files, all green.** `pnpm verify` = typecheck + lint + format-check + test + audit.
+**1,000 tests, 30 files, all green.** `pnpm verify` = typecheck + lint + format-check + test + audit.
 
 - **428 tests, 15 files, all passing.** `pnpm verify` green.
 - `pnpm verify` = `format:check → lint → typecheck → test → build`. Identical to CI.
@@ -478,18 +478,70 @@ path is complete and the automated path is a stub with no fabricated data behind
 
 ---
 
-## M3. NEXT PHASE: Phase 10 — Dashboard command centre
+## M3. Phases 10–15 — the record
 
-Read `docs/ROADMAP.md` Phase 10 in full first.
+All fifteen phases are built. **`docs/VALIDATION.md` is the authoritative honest
+assessment** — read it before anything else. Its one-line summary: _"The system is
+ready to be tried. It is not validated."_
 
-**The house style, now established across five phases and worth stating once:**
-compute, then cap in code — never in a prompt, never as a weight that volume can
-outvote. Phase 5 caps confidence, Phase 6 caps the analysis output, Phase 7 forces the
-recommendation. Anything a hostile document could influence gets this treatment.
+### Phase 10 — Dashboard (tag `phase-10-complete`)
 
-**The second recurring lesson:** every measured acceptance criterion in Phases 5, 7 and
-9 failed on its first run, and every failure was a real defect rather than a badly-set
-threshold. Measure against real data before believing anything.
+`apps/web`. Server components only, CSP verified on the wire (`default-src 'none'`,
+no `unsafe-inline`). Three defects the first render exposed: it was **migrating the
+schema on page load** (a reader must not own migrations); `MIGRATIONS_FOLDER` failed
+the Turbopack build because `new URL(literal, import.meta.url)` reads as a static
+**asset reference**; a missing schema produced a raw `SqliteError`.
+
+### Phase 11 — Alerts (tag `phase-11-complete`)
+
+Four independent reasons _not_ to fire. Ships silent (`ALERT_MIN_PRIORITY=urgent`).
+**Found: a LIMIT read as a truncation** — `latestScores` filtered gate survivors in JS
+_after_ the LIMIT, so measured restraint swung 50.8% ↔ 21.1% on the `--limit` flag
+alone. **Found: one judgement, three derivations** — the recommendation logic was
+reimplemented in three callers and the third had drifted. `strategyFromScore` is now
+the single derivation.
+
+### Phase 12 — Analytics (tag `phase-12-complete`)
+
+Offline replay over 5,007 events, **$0 API cost**. **The refit itself did NOT run and
+cannot**: fitting needs outcomes, outcomes need posts. Producing numbers against an
+empty outcome set would be noise wearing the label "measured". The guesses stay.
+
+### Phase 13 — Live integration (tag `phase-13-complete`)
+
+**MEASURED detection latency: p50 11.3h.** The T-4 posting control is structural, not a
+setting: `authorise()` checks a hash of **the bytes actually being sent**, throws
+rather than returning a boolean, and the module contains no `fetch(`. **Nothing has
+been posted; posting is disabled; no X credential exists.**
+
+### Phase 14 — Security (tag `phase-14-complete`)
+
+`pnpm security` reports **6/6 live controls**, exits non-zero, gates a release. Zero
+advisories at any severity. **Found: the redaction check captured nothing** because
+pino writes to fd 1 and `process.stdout.write` patching never sees it — a test that
+captures nothing would report a _leaking_ redactor as fine.
+
+### Phase 15 — Validation (tag `phase-15-complete`)
+
+`docs/VALIDATION.md`. Exit criterion met (the report exists and is honest); **no
+acceptance criterion is met** and none can be today. §6 is thirteen things the system
+does badly, which is the next backlog.
+
+---
+
+## M4. If you are picking this up
+
+1. **Read `docs/VALIDATION.md` first.** §5 is what is outstanding and why; §6 is what
+   is wrong. Both are current.
+2. **The highest-value unblock is credentials.** `ANTHROPIC_API_KEY` alone unblocks
+   Phase 6's three criteria, makes Phase 12's refit _possible_, and turns the analysis
+   tier from MOCK into something judgeable.
+3. **The second is the operator.** Six phases wait on his judgement. None can be
+   substituted for.
+4. **Two patterns are house style now.** Caps go in code, never in prompts — a weight
+   can be outvoted by volume, a cap cannot. And every measured acceptance criterion so
+   far failed on its first run against real data, each time from a real defect rather
+   than a badly-set threshold. **Measure before believing.**
 
 ---
 
