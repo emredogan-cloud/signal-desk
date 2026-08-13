@@ -36,7 +36,8 @@
     "measure:dedup": "tsx --conditions=development apps/worker/src/cli/measure-dedup.ts",
     "score": "tsx --conditions=development apps/worker/src/cli/score.ts",
     "analyze": "tsx --conditions=development apps/worker/src/cli/analyze.ts",
-    "strategy": "tsx --conditions=development apps/worker/src/cli/strategy.ts"
+    "strategy": "tsx --conditions=development apps/worker/src/cli/strategy.ts",
+    "trend": "tsx --conditions=development apps/worker/src/cli/trend.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

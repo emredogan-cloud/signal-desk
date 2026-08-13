@@ -50,6 +50,13 @@
       "when": 1786642050372,
       "tag": "0006_phase6_skip_code",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1786643507355,
+      "tag": "0007_phase9_trends",
+      "breakpoints": true
     }
   ]
 }

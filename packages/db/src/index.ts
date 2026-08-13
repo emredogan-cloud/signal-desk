@@ -10,6 +10,7 @@ export * from './queries/raw-items.js';
 export * from './queries/events.js';
 export * from './queries/scores.js';
 export * from './queries/analyses.js';
+export * from './queries/trends.js';
 
 /**
  * Absolute path to the migrations folder, resolved from this module rather than from

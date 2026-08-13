@@ -1045,7 +1045,16 @@ refused before submission for the same reason.
 
 ---
 
-## ☐ Phase 9 — Trend intelligence
+## ◐ Phase 9 — Trend intelligence
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-9-complete`. 879 tests, CI green.
+>
+> Built to the roadmap's own honest scoping: **human-observed, machine-tracked**.
+> Manual entry is the primary interface (`pnpm trend`), and the CLI ends every run by
+> printing what automated detection cannot do rather than leaving it implied.
+>
+> **`PENDING-ELAPSED`:** tracking a manually-entered trend over ≥2 weeks, and whether
+> automated detection surfaces a genuine emerging format over a month.
 
 **OBJECTIVE** Detect emerging social formats and behaviours — separately from news — and place them
 on a lifecycle.
@@ -1087,6 +1096,54 @@ outcomes. Recommendation-by-stage matrix.
 **EXIT CRITERIA** Above, including the honest documentation of what automated detection cannot do.
 
 **ROLLBACK** Isolated subsystem.
+
+### Phase 9 outcome — 2026-08-13
+
+| Acceptance criterion                                                           | Result                                                                                                                              |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Manual trend entry → complete trend card → tracked trajectory over ≥2 weeks    | ◐ entry, card, and tracking work end to end; the two weeks are **PENDING-ELAPSED**                                                  |
+| Lifecycle stage transitions are explainable                                    | ✅ every placement returns the numbers it decided on, and a test asserts the explanation is non-trivial for each branch             |
+| Automated detection surfaces ≥1 genuine emerging technical format over a month | ⏳ **PENDING-ELAPSED** — and the criterion's own escape clause applies: if it does not, that is documented rather than papered over |
+| Saturation detection correctly marks a known-saturated format as SATURATED     | ✅ tested against the characteristic curve                                                                                          |
+
+**A test forced a real modelling correction.** Saturation was gated on overall growth —
+the recent half of the series against the earlier half. But a format that ramped hard
+and then plateaued still shows strong overall growth, because the early half _contains
+the ramp_. The plainly saturated curve `40, 70, 72, 68, 65` reported +24% growth and
+was placed MAINSTREAM. Two different questions were being conflated:
+
+- **growth** — how far has it come since we started watching
+- **momentum** — is it still climbing _now_
+
+Saturation turns on the second. Both are now computed and both appear in the
+explanation, so the operator can see a trend that has travelled a long way and stopped.
+
+**Saturation scores BREADTH, not volume.** A format discussed loudly in one community
+is not saturated; one that has reached every community is, however quietly. Falling
+breadth after a wide peak is the clearest saturation signal available without paid
+social data, and a test asserts the quiet-broad case outscores the loud-narrow one.
+
+**The machine never writes a human field.** `mechanism`, `howToParticipate`, and
+`originalVersion` are `string | undefined` rather than optional, so "the operator has
+not filled this in" is a state the type can represent — and `missing` names each gap
+explicitly. A fabricated mechanism ("this format works because it rewards curiosity")
+reads exactly like a real one, and once stored it is indistinguishable from something
+he actually observed.
+
+**What automated detection cannot do, stated in the product.** `pnpm trend` prints it
+at the end of every run: formats on X, TikTok, and Instagram are invisible to free
+feeds; the automated signal covers technical-format repetition on HN, Reddit,
+Lobsters, and GitHub only. This is the phase most at risk of quietly overclaiming, so
+the limitation is in the output rather than only in the documentation.
+
+**Known gaps carried forward.**
+
+1. The automated signal is **specified but not wired to ingestion**. The lifecycle and
+   card work over any observation series; nothing yet writes automated observations.
+   That is the honest state: the manual path is complete and the automated path is a
+   stub with no fabricated data behind it.
+2. `MIN_OBSERVATIONS_FOR_STAGE = 3` and `STALE_AFTER_DAYS = 14` are guesses.
+3. Saturation weights (0.6 breadth, 0.4 decay) are guesses, like the Phase 5 weights.
 
 ---
 

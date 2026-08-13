@@ -556,3 +556,53 @@ export const analyses = sqliteTable(
 
 export type AnalysisRow = typeof analyses.$inferSelect;
 export type NewAnalysisRow = typeof analyses.$inferInsert;
+
+/**
+ * Trends and their observation series. `ROADMAP.md` Phase 9.
+ *
+ * Two tables, because the series is the data. A trend row holds what a human asserted
+ * once; observation rows hold the trajectory. "Growing" and "declining" are statements
+ * about a sequence, so the sequence has to be stored.
+ */
+export const trends = sqliteTable(
+  'trends',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull().unique(),
+    platform: text('platform').notNull(),
+
+    /** Human-supplied. NULL when the operator has not filled it in — never guessed. */
+    mechanism: text('mechanism'),
+    howToParticipate: text('how_to_participate'),
+    originalVersion: text('original_version'),
+
+    /** Latest computed placement. Recomputed from the series, never hand-edited. */
+    stage: text('stage').notNull().default('UNKNOWN'),
+    saturation: real('saturation').notNull().default(0),
+    stageExplanation: text('stage_explanation').notNull().default(''),
+
+    createdAt: timestamp('created_at').notNull(),
+    updatedAt: timestamp('updated_at').notNull(),
+  },
+  (table) => [index('trends_stage_idx').on(table.stage)],
+);
+
+export const trendObservations = sqliteTable(
+  'trend_observations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    trendId: integer('trend_id')
+      .notNull()
+      .references(() => trends.id, { onDelete: 'cascade' }),
+    observedAt: timestamp('observed_at').notNull(),
+    mentionCount: integer('mention_count').notNull(),
+    distinctSources: integer('distinct_sources').notNull(),
+    /** True when the operator entered it. Manual entry is first-class, not a fallback. */
+    manual: integer('manual', { mode: 'boolean' }).notNull().default(true),
+    note: text('note').notNull().default(''),
+  },
+  (table) => [index('trend_obs_idx').on(table.trendId, table.observedAt)],
+);
+
+export type TrendRow = typeof trends.$inferSelect;
+export type TrendObservationRow = typeof trendObservations.$inferSelect;
