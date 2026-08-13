@@ -367,6 +367,43 @@ order they should be pulled:
 Phase 6 must ship with the budget guard and a real measured cost-per-day figure before Phase 7 starts.
 "It's probably fine" is not a number.
 
+### MEASURED cost — 2026-08-13, live Anthropic calls
+
+The estimate above was written before any call was made. These are the real figures,
+from `analyses` / `spend_ledger` rows produced by `pnpm analyze` against
+`claude-haiku-4-5` and `claude-opus-5`.
+
+| Line                             |                Measured | Notes                                     |
+| -------------------------------- | ----------------------: | ----------------------------------------- |
+| Triage, per call                 |            **$0.00365** | 65 calls, $0.2372                         |
+| Deep analysis, per call          |             **$0.1529** | 3 calls, $0.4587                          |
+| Full pass over 65 gate survivors |              **$0.696** | 65 triage + 3 analyses                    |
+| Prompt-cache read rate           | **67/68 calls (98.5%)** | 289,185 cache-read tokens on triage alone |
+
+**The estimate was wrong in both directions, and the shape matters more than the
+magnitude.**
+
+- **Deep analysis is ~5x more expensive per call than assumed** ($0.153 vs the ~$0.03
+  implied by $25–40 over 8/day). Claude Opus 5 thinks by default, and thinking is
+  billed; the estimate was written for a model that did not.
+- **Far fewer events reach it than assumed.** The estimate assumed 8 deep analyses a
+  day. Measured: **3 from 65 gate survivors**, because triage rejects most of what the
+  gate passes. The rule gate plus triage together are doing more work than modelled.
+- **The prompt cache is real and large.** 98.5% of calls read from cache. Without it
+  the triage line would be several times higher.
+
+Extrapolating one backfill pass to a month would be guessing at the daily event rate,
+which is not yet known — so no monthly figure is stated here. What _is_ established:
+
+- **A full pass over everything currently past the gate costs about $0.70.**
+- **The gate is doing the work claimed for it.** 5,007 events → 65 past the gate → 3
+  deep analyses. Without it, 5,007 triage calls alone would cost ≈ **$18**, and the
+  deep tier would be unaffordable at any threshold.
+
+`AI_ANALYSIS_THRESHOLD` was changed from 70 to **50** on the same evidence: the highest
+combined score over 5,007 real events is 66, so 70 made the expensive tier unreachable
+by construction.
+
 ---
 
 ## 7. Data layer

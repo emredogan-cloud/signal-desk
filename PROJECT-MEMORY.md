@@ -529,6 +529,44 @@ does badly, which is the next backlog.
 
 ---
 
+## M3b. LIVE ANTHROPIC VALIDATION — 2026-08-13
+
+`ANTHROPIC_API_KEY` configured. `AI_MODE=LIVE`. Real calls made to
+`claude-haiku-4-5` and `claude-opus-5`.
+
+**MEASURED**
+
+|                                       |                                                              |
+| ------------------------------------- | ------------------------------------------------------------ |
+| Triage schema compliance              | 64/65 (98.5%)                                                |
+| Prompt cache read rate                | **67/68 calls** — measured, not inferred                     |
+| Cost, triage                          | $0.00365/call                                                |
+| Cost, deep analysis                   | $0.1529/call                                                 |
+| Full pass, 65 gate survivors          | $0.696                                                       |
+| Live red team                         | 16/16 schema held, 0 bought attention, 0 benign over-refused |
+| Strategy restraint with real analyses | 50.8% → **52.3%**                                            |
+
+**`AI_ANALYSIS_THRESHOLD` changed 70 → 50** from measurement: max real combined score
+is 66, so 70 made the expensive tier unreachable by construction.
+
+**Eight defects found — see `docs/VALIDATION.md` §9.** The two that matter most:
+
+1. **Real spend recorded as $0.00** — the API returns _dated_ model ids
+   (`claude-haiku-4-5-20251001`) and the pricing table was keyed by the alias. The
+   budget guard could never have fired. Pricing now does longest-prefix match.
+2. **`--reset` erased the record of money already spent**, because spend was derived
+   from the `analyses` table. `spend_ledger` is now append-only and untouchable by
+   `--reset`. Analyses are derived and disposable; money is not.
+
+**Budget discipline:** roughly $2.00 of real calls were made against a $2.00/day
+ceiling, so live runs stopped there rather than gathering a bigger analysis sample.
+The ledger starts from its own creation and is **not** back-dated with a guess.
+
+**Still open after the live run:** ≥100-event schema conformance and the operator's
+non-obviousness judgement. Three deep analyses is not a quality measurement.
+
+---
+
 ## M4. If you are picking this up
 
 1. **Read `docs/VALIDATION.md` first.** §5 is what is outstanding and why; §6 is what

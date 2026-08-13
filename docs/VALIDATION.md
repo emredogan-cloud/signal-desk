@@ -2,6 +2,11 @@
 
 **Date:** 2026-08-13 · **Phases 1–15 built** · **1,000 tests** · **CI green**
 
+> **UPDATED 2026-08-13, later the same day: `ANTHROPIC_API_KEY` was configured and the
+> AI path was validated against the real models.** §2, §3, and §6 below are revised.
+> The live run found **eight defects**, listed in §9. Three items in the original §6
+> are now closed and are struck through there rather than deleted.
+
 `ROADMAP.md` Phase 15's exit criterion is one sentence: _"The validation report exists
 and is honest."_ This is that report.
 
@@ -160,18 +165,19 @@ it INFERRED. Nothing has validated the substitution. It is weighted at 0.12 of
 importance specifically so that discarding it does bounded damage — which is mitigation,
 not evidence.
 
-### 6.3 Nothing has passed through a real model
+### 6.3 ~~Nothing has passed through a real model~~ — **CLOSED 2026-08-13**
 
-`AI_MODE=MOCK` proves the pipeline runs; it proves nothing about analysis quality. The
-prompts are untested against a model. The Haiku cache floor is satisfied by a
-character-count estimate, not a measured `cache_read_input_tokens > 0`.
+Superseded. The live path was validated: 65 triage calls, 3 deep analyses, and 16
+hostile documents through the real model. Cache is measured at **67/68 calls reading
+from cache**, not inferred from prompt length. The remaining gap is _sample size_ —
+one day's budget bought 3 deep analyses, not the ≥100 events the criterion asks for.
 
-### 6.4 The analysis threshold and the score scale are miscalibrated
+### 6.4 ~~The analysis threshold and the score scale are miscalibrated~~ — **CLOSED 2026-08-13**
 
-Top combined score over 5,007 events: **66**. `AI_ANALYSIS_THRESHOLD` default: **70**.
-The expensive tier is unreachable by construction. Neither number was changed to hide
-this — both are reported, and the CLI now says so out loud — but the system as
-configured would never deep-analyse anything.
+Fixed with evidence rather than by preference. `AI_ANALYSIS_THRESHOLD` is now **50**,
+chosen after measuring candidate counts and real cost at 70 / 60 / 50 / 45 over the 65
+gate survivors. It remains a threshold over _unfitted_ weights: when Phase 12 refits
+them the scale moves and this must be re-measured, not preserved.
 
 ### 6.5 Detection is same-day, not early
 
@@ -195,11 +201,12 @@ believe the current set is complete.
 Dedup state is per-run. Two runs an hour apart both alert on the same fact. Stated in
 the code rather than left for a reader to assume otherwise, but unfixed.
 
-### 6.9 Several DON'T POST reasons have never fired on real data
+### 6.9 One DON'T POST reason still has never fired _(was two)_
 
-`insufficient_information` and `reputational_risk` depend on `stillUnknown` and
-`doNotSay`, which come from Phase 6 analyses. No event has one. They are implemented
-and tested and have never run in anger.
+Real analyses now feed the strategy layer, and **`insufficient_information` has fired
+on real data**. Restraint rose 50.8% → 52.3%. `reputational_risk` still has not: it
+needs an event whose do-not-say list runs to five entries, and the longest so far is
+eight — on an event that was not otherwise a DON'T POST candidate.
 
 ### 6.10 No accessibility audit has been run
 
@@ -223,6 +230,51 @@ than not scheduling it, but the gap is real.
 Every measurement here comes from a single backfill on one developer machine. CI on
 different hardware has already caught defects local runs did not (two timing failures,
 one hung smoke test). A production environment will find more.
+
+---
+
+## 9. What the live run found
+
+Eight defects, none of which any amount of MOCK testing would have surfaced.
+
+1. **Real spend was recorded as $0.00.** The API returns dated model ids
+   (`claude-haiku-4-5-20251001`); the pricing table was keyed by the alias, so
+   `callCostUsd` returned `undefined` and the caller coalesced it to zero. The ledger
+   read flat while 8,764 cache-read tokens were being billed. **The budget guard could
+   never have fired.**
+2. **`--reset` erased the record of money already spent.** Spend was derived from the
+   `analyses` table. Across the day's runs "spent today" returned to $0.0000 six times
+   while ≈$2.00 of real calls had been made. Analyses are derived and disposable; money
+   is not. `spend_ledger` is now append-only and `--reset` cannot touch it.
+3. **Good triage verdicts were discarded for running long.** `reason` was capped at 300
+   characters and two of six real Haiku calls wrote ~320 characters of sound reasoning.
+   Structured outputs carry no `maxLength`, so the bound was invisible to the model and
+   fatal to us — work already paid for, thrown away.
+4. **Opus analyses truncated mid-JSON.** Claude Opus 5 thinks by default and
+   `max_tokens` caps thinking plus response _together_; a 4k budget spent itself
+   reasoning. It surfaced as "not valid JSON despite structured outputs" — a budget
+   problem wearing a schema problem's error message.
+5. **The provenance check compared presentation, not value.** A sourced figure written
+   `27,674` in a claim and `27674` in the narrative failed a substring match and
+   discarded a paid analysis.
+6. **Cache reporting read the wrong stage.** It printed "0 successful calls — too few
+   to demonstrate a hit" while the ledger showed 8,764 cache-read tokens from triage.
+7. **Validation failures were undiagnosable.** The stored reason was "output did not
+   match the schema" and nothing else.
+8. **A rejected analysis threw away the only thing that could explain it.** The
+   payload was stored as `null` on failure, so the model's actual output — already
+   paid for — went with the verdict.
+
+**What the model got right.** Judged on the one clean analysis and the triage sample:
+claims all carried evidence ids; `DO NOT SAY` entries were specific and event-grounded
+(_"they are no longer auto-approved, which is a prompt, not a block"_); `stillUnknown`
+named real gaps including "no independent confirmation"; confidence was MED under a
+single official source, which is the two-source rule working. The insight in the
+`whatChanged` field was genuinely non-obvious rather than a changelog restatement.
+
+**What is still not known.** Three deep analyses is not a quality measurement. The
+≥100-event schema-conformance bar and the operator's non-obviousness judgement both
+remain open, and one day's `AI_DAILY_BUDGET_USD` does not buy them.
 
 ---
 
