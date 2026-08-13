@@ -75,6 +75,15 @@ export type SkipCode = (typeof SKIP_CODES)[number];
 export type StageOutcome<T> = {
   readonly status: 'ok' | 'skipped' | 'refused' | 'failed';
   readonly value: T | undefined;
+  /**
+   * The raw response, kept ONLY when validation rejected it.
+   *
+   * A rejected analysis was previously discarded entirely, so the one thing that could
+   * explain why the model failed to comply — its actual output — was thrown away,
+   * having already been paid for. Two Opus analyses were lost this way before this
+   * existed.
+   */
+  readonly rejectedRaw?: unknown;
   readonly reason: string;
   /**
    * Present only on a skip. Exists because the CLI first grouped skips by matching

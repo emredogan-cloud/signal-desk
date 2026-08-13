@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import type { ConfidenceLevel } from '@signal-desk/shared';
 import type { Db } from '../client.js';
-import { analyses, events, eventScores } from '../schema.js';
+import { analyses, events, eventScores, spendLedger } from '../schema.js';
 
 /**
  * Analysis persistence and the spend ledger.
@@ -38,13 +38,29 @@ export function insertAnalyses(db: Db, rows: readonly AnalysisInsert[], createdA
   db.transaction((tx) => {
     for (const row of rows) {
       const { costUsd, ...rest } = row;
+      const micro = Math.round(costUsd * 1_000_000);
+
       tx.insert(analyses)
-        .values({
-          ...rest,
-          costMicroUsd: Math.round(costUsd * 1_000_000),
-          createdAt,
-        })
+        .values({ ...rest, costMicroUsd: micro, createdAt })
         .run();
+
+      // Also record it where `--reset` cannot reach. An analysis is derived and can be
+      // thrown away; the money was spent either way, and the budget guard has to read
+      // a number that reflects that.
+      if (micro > 0 || rest.inputTokens > 0 || rest.outputTokens > 0) {
+        tx.insert(spendLedger)
+          .values({
+            stage: rest.stage,
+            model: rest.model,
+            inputTokens: rest.inputTokens,
+            outputTokens: rest.outputTokens,
+            cacheReadTokens: rest.cacheReadTokens,
+            cacheWriteTokens: rest.cacheWriteTokens,
+            costMicroUsd: micro,
+            spentAt: createdAt,
+          })
+          .run();
+      }
     }
   });
 
@@ -59,10 +75,12 @@ export function insertAnalyses(db: Db, rows: readonly AnalysisInsert[], createdA
  * drift from what was actually recorded.
  */
 export function spendSince(db: Db, since: Date): number {
+  // Reads the LEDGER, not `analyses`. Reading `analyses` meant `--reset` zeroed the
+  // figure the budget guard depends on.
   const row = db
-    .select({ total: sql<number>`coalesce(sum(${analyses.costMicroUsd}), 0)` })
-    .from(analyses)
-    .where(gte(analyses.createdAt, since))
+    .select({ total: sql<number>`coalesce(sum(${spendLedger.costMicroUsd}), 0)` })
+    .from(spendLedger)
+    .where(gte(spendLedger.spentAt, since))
     .get();
   return (row?.total ?? 0) / 1_000_000;
 }

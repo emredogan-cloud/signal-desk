@@ -57,6 +57,13 @@
       "when": 1786643507355,
       "tag": "0007_phase9_trends",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786650999162,
+      "tag": "0008_spend_ledger",
+      "breakpoints": true
     }
   ]
 }

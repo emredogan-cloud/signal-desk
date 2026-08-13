@@ -606,3 +606,34 @@ export const trendObservations = sqliteTable(
 
 export type TrendRow = typeof trends.$inferSelect;
 export type TrendObservationRow = typeof trendObservations.$inferSelect;
+
+/**
+ * The spend ledger. **Append-only, and `--reset` must never touch it.**
+ *
+ * Spend was previously derived from `analyses`, which meant `pnpm analyze --reset`
+ * erased the record of money that had actually been spent. Across the live validation
+ * runs the reported "spent today" returned to $0.0000 six times while roughly $1.77 of
+ * real API calls had been made — the budget guard was reading a number that reset
+ * itself, so the daily ceiling could be exceeded several times over without ever
+ * tripping.
+ *
+ * Analyses are derived and can be discarded. **Money is not.**
+ */
+export const spendLedger = sqliteTable(
+  'spend_ledger',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    stage: text('stage').notNull(),
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    /** Micro-dollars. Integer, because a day is a sum of hundreds of small amounts. */
+    costMicroUsd: integer('cost_micro_usd').notNull().default(0),
+    spentAt: timestamp('spent_at').notNull(),
+  },
+  (table) => [index('spend_ledger_at_idx').on(table.spentAt)],
+);
+
+export type SpendLedgerRow = typeof spendLedger.$inferSelect;
