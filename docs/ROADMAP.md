@@ -356,7 +356,15 @@ follows URLs found _inside_ content.
 
 ---
 
-## ☐ Phase 3 — Ingestion adapters
+## ◐ Phase 3 — Ingestion adapters
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-3-complete`. Five of six acceptance
+> criteria met and measured. 428 tests.
+>
+> **Outstanding: `PENDING-ELAPSED` — the exit criterion** requires "≥24 hours of
+> continuous live ingestion with source-freshness telemetry recorded for every
+> source". The telemetry exists and is recorded; the 24 hours have not passed. Start
+> the worker (`pnpm worker:dev`) and re-check tomorrow.
 
 **OBJECTIVE** Scheduled, polite, resilient fetching from every source type into an immutable
 `raw_items` table.
@@ -401,6 +409,75 @@ oversized response; timeout. Scheduler interval and jitter logic.
 recorded for every source.
 
 **ROLLBACK** Adapters are additive per source type. Disable a source row rather than reverting code.
+
+### Phase 3 outcome — 2026-08-13
+
+| Acceptance criterion                                                            | Result                                                                                                                                                           |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATA_MODE=LIVE` run ingests from all seeded sources with zero unhandled errors | ✅ **60/60, 5,198 items, 0 failures** (after the registry fix below)                                                                                             |
+| A run produces a plausible item count with no duplicates in `raw_items`         | ✅ 5,198 items; `duplicateExternalIds()` returns empty, and the second pass inserted **0**                                                                       |
+| 304s are observed and cost no parsing work                                      | ✅ **measured: 45 of 60 sources answered 304** on the second pass — 75% of the registry supports conditional requests                                            |
+| All SSRF tests pass                                                             | ✅ 33 cases including the redirect-into-metadata chain from `THREAT-MODEL.md` §5 test 3                                                                          |
+| `DATA_MODE=MOCK` reproduces a full run with no network access at all            | ✅ **verified under `unshare -r -n`** — 60 sources, 962 items, network namespace with no interfaces. Also enforced as a unit test whose `fetch` throws if called |
+| Circuit breaker demonstrably opens on persistent 500s                           | ✅ end-to-end against the real database: opens at 3 failures, skips the source, closes on recovery, and does **not** trip on a 304                               |
+| **≥24h continuous live ingestion** (exit criterion)                             | ⏳ **PENDING-ELAPSED**                                                                                                                                           |
+
+**Measured values.**
+
+| Measurement                                 | Value                                   |
+| ------------------------------------------- | --------------------------------------- |
+| Live registry sweep, 60 sources, sequential | ~35s                                    |
+| Items on first ingest                       | 5,198                                   |
+| Conditional-request support                 | **45/60 sources (75%)**                 |
+| Largest single feed                         | `vercel-changelog`, 1,463 items / 3.1MB |
+| MOCK run (fixtures, no network)             | 962 items                               |
+
+**What the first LIVE run found that nothing else would have.**
+
+**Two registered hosts had moved, and only ingestion noticed.** `status.anthropic.com`
+now 302s to `status.claude.com`, and `docs.claude.com` 301s to `platform.claude.com`.
+`pnpm sources:probe` reported both as _healthy_ — a probe follows redirects — while
+ingestion refused them, because the SSRF allowlist is built from **registered**
+hostnames and a cross-host hop lands outside it.
+
+The allowlist was right; the registry was stale. Both URLs are now registered at
+their canonical hosts, and **the probe now warns on any cross-host redirect** so this
+drift surfaces at health-check time instead of costing a detection. A Priority-1
+source failing while the health check says green is exactly the T-9 shape the
+registry exists to prevent, and it had reproduced itself inside the tooling.
+
+**Design decisions worth recording.**
+
+- **`page_snapshots` was designed, then deleted before it shipped.** HTML diffing
+  needs to know whether a page changed. Rather than store last-seen hashes, the hash
+  is encoded into the item's identity: link mode keys on the URL, text mode on
+  `page:<hash>`. An unchanged page therefore produces an id already in `raw_items` and
+  inserts nothing. A snapshot table would have been a second source of truth able to
+  drift from `raw_items`, for no additional capability.
+- **One scheduler tick, not sixty cron jobs.** Due-ness is computed from the
+  persisted `lastCheckedAt`, so a restart resumes rather than re-fetching everything —
+  which sixty in-memory jobs would do on every deploy, turning a restart into a burst
+  against every publisher at once.
+- **A 304 is a success for the circuit breaker.** Counting it as a failure would open
+  the breaker on precisely the 45 sources behaving best.
+- **`not_a_feed` and `empty_feed` do not trip the breaker.** They mean the source is
+  reachable and its _content_ is wrong — a registry problem for a human, not a reason
+  to stop asking. Backing off would hide the fault behind an open breaker instead of
+  surfacing it on the freshness panel.
+
+**Known gaps carried forward.**
+
+1. **The 24-hour continuous run has not happened.** This is the exit criterion.
+2. `GithubApiClient` exists with its budget tracking and is **not yet called** —
+   enrichment is driven from Phase 5 scoring, which does not exist. Registered as
+   `github_api`, it deliberately throws if the scheduler ever reaches it.
+3. Retry-with-backoff is implemented and unit-tested, but the ingest loop currently
+   makes **one attempt per tick** rather than retrying inside a tick. For a source
+   polled every 5 minutes the next tick _is_ the retry, and an in-tick retry would
+   mostly serve to hit a struggling host three times instead of once. Revisit if
+   measurement shows single-attempt failures that a 30-second retry would have caught.
+4. `eugeneyan.com` serves its full 212-item archive; the first ingest reads as a burst
+   of activity that is really history.
 
 ---
 

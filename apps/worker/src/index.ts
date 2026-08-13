@@ -9,9 +9,15 @@ import { runWorker, installSignalHandlers } from './worker.js';
  * else exits 1 with the full error, because an unexpected failure is a bug.
  */
 async function main(): Promise<void> {
-  const result = await runWorker({ once: true });
+  // `--once` runs a single pass and exits: what CI uses to prove the built artifact
+  // starts cleanly, and what a cron-driven deployment would call. Without it the
+  // worker stays up and polls on its own schedule.
+  const once = process.argv.includes('--once');
+
+  const result = await runWorker({ once });
   installSignalHandlers(result.shutdown);
-  await result.shutdown();
+
+  if (once) await result.shutdown();
 }
 
 main().catch((error: unknown) => {

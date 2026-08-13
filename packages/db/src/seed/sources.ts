@@ -179,16 +179,18 @@ export const SOURCE_SEEDS: readonly SourceSeed[] = [
   {
     id: 'anthropic-release-notes-diff',
     name: 'Anthropic API release notes (HTML diff)',
-    url: 'https://docs.claude.com/en/release-notes/overview',
+    url: 'https://platform.claude.com/docs/en/release-notes/overview',
     platform: 'html_diff',
     category: 'OFFICIAL_SOURCE',
     entity: 'anthropic',
     priority: 2,
     isOfficial: true,
     expectedValue:
-      'Model IDs and API changes, often before the news post. Redirects to ' +
-      'platform.claude.com/docs/. 64% of the page is script bundle, so diff extracted text ' +
-      'only — raw-byte diffing fires on every deploy. 15-minute floor.',
+      'Model IDs and API changes, often before the news post. Registered at its CANONICAL ' +
+      'host: docs.claude.com 301s here, and the SSRF allowlist correctly refused to follow a ' +
+      'cross-host redirect (found on the first LIVE run, 2026-08-13). 64% of the page is ' +
+      'script bundle, so diff extracted text only — raw-byte diffing fires on every deploy. ' +
+      '15-minute floor.',
     verifiedAt: '2026-08-13',
     pollIntervalSec: 15 * 60,
   },
@@ -390,14 +392,17 @@ export const SOURCE_SEEDS: readonly SourceSeed[] = [
   {
     id: 'status-anthropic',
     name: 'Anthropic Status',
-    url: 'https://status.anthropic.com/history.rss',
+    url: 'https://status.claude.com/history.rss',
     platform: 'statuspage',
     category: 'OFFICIAL_SOURCE',
     entity: 'anthropic',
     priority: 1,
     isOfficial: true,
-    expectedValue: 'Outages on the operator’s primary vendor.',
-    verifiedAt: DOC,
+    expectedValue:
+      'Outages on the operator’s primary vendor. NOTE: status.anthropic.com now 302s here — ' +
+      'Anthropic moved its status page to the claude.com domain. Registered at the canonical ' +
+      'host; found on the first LIVE run, 2026-08-13.',
+    verifiedAt: '2026-08-13',
   },
   {
     id: 'status-openai',

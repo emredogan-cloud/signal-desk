@@ -7,7 +7,10 @@ import {
   MIGRATIONS_FOLDER,
   type DatabaseHandle,
 } from '@signal-desk/db';
+import { createAdapterRegistry } from '@signal-desk/adapters';
 import { bootstrap, logStartupState, type Bootstrap, type BootstrapOptions } from './bootstrap.js';
+import { createScheduler, type Scheduler } from './scheduler.js';
+import { findRepoRoot } from './repo-root.js';
 
 /**
  * The long-lived process: scheduler → pipeline.
@@ -23,12 +26,14 @@ export type RunOptions = BootstrapOptions & {
   readonly once?: boolean;
   /** Override the database location. Tests pass ':memory:'. */
   readonly databaseUrl?: string;
+  /** Override the scheduler tick. Tests use a short one. */
+  readonly tickSeconds?: number;
 };
 
 export type RunResult = {
   readonly bootstrapped: Bootstrap;
   readonly database: DatabaseHandle;
-  /** Resolves when the worker has shut down. Absent in `once` mode. */
+  readonly scheduler: Scheduler;
   readonly shutdown: () => Promise<void>;
 };
 
@@ -87,26 +92,46 @@ export async function runWorker(options: RunOptions = {}): Promise<RunResult> {
     );
   }
 
+  // ARCHITECTURE.md §8: the MOCK/LIVE distinction is explicit and never inferred.
+  // The registry is chosen once, here, so no adapter contains a branch on mode and
+  // none can make a network call in MOCK by accident.
+  const registry = createAdapterRegistry({
+    mode: bootstrapped.modes.dataMode,
+    fixturesDir: `${findRepoRoot()}/fixtures`,
+  });
+
+  const scheduler = createScheduler({
+    db: database.db,
+    registry,
+    logger,
+    githubToken: config.GITHUB_TOKEN,
+    ...(options.tickSeconds !== undefined ? { tickSeconds: options.tickSeconds } : {}),
+  });
+
   let closed = false;
   const shutdown = async (): Promise<void> => {
     if (closed) return;
     closed = true;
     logger.info('shutting down');
+    await scheduler.stop();
     database.close();
-    await Promise.resolve();
   };
 
   if (options.once === true) {
-    logger.info('startup self-test complete (once mode); no pipeline is implemented yet');
-    return { bootstrapped, database, shutdown };
+    logger.info(
+      { data_mode: bootstrapped.modes.dataMode },
+      'startup self-test complete (once mode); scheduler not started',
+    );
+    return { bootstrapped, database, scheduler, shutdown };
   }
 
-  logger.warn(
-    'no scheduler is implemented at Phase 1 — the worker has nothing to do and will exit. ' +
-      'Ingestion arrives in Phase 3.',
+  scheduler.start();
+  logger.info(
+    { sources: counts.sources, tick_seconds: options.tickSeconds ?? 60 },
+    'worker running — ingesting on schedule. Ctrl-C to stop.',
   );
 
-  return { bootstrapped, database, shutdown };
+  return { bootstrapped, database, scheduler, shutdown };
 }
 
 /** Wire SIGINT/SIGTERM to a clean shutdown. Only the real entrypoint calls this. */

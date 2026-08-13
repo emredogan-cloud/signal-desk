@@ -104,6 +104,38 @@ export function staleSources(
   );
 }
 
+/**
+ * Record circuit-breaker state after a fetch. THREAT-MODEL.md §T-10.
+ *
+ * Kept separate from `recordFetchAttempt` because the two answer different questions
+ * and are written at different times: freshness is about the source, the breaker is
+ * about whether to keep asking.
+ */
+export function recordBreakerState(
+  db: Db,
+  id: string,
+  state: { consecutiveFailures: number; circuitOpenUntil: Date | null },
+  errorMessage: string | null,
+  now: Date = new Date(),
+): void {
+  db.update(sources)
+    .set({
+      consecutiveFailures: state.consecutiveFailures,
+      circuitOpenUntil: state.circuitOpenUntil,
+      lastErrorMessage: errorMessage,
+      updatedAt: now,
+    })
+    .where(eq(sources.id, id))
+    .run();
+}
+
+/** Sources whose breaker is currently open. Surfaced, never silent. */
+export function trippedSources(db: Db, now: Date = new Date()): SourceRow[] {
+  return listSources(db, { activeOnly: true }).filter(
+    (s) => s.circuitOpenUntil !== null && s.circuitOpenUntil.getTime() > now.getTime(),
+  );
+}
+
 export function countSourcesByPriority(db: Db): Record<number, number> {
   const rows = db
     .select({ priority: sources.priority, n: sql<number>`count(*)` })

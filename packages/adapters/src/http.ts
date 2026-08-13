@@ -30,6 +30,12 @@ export class FetchLimitError extends Error {
 }
 
 export type SafeFetchOptions = {
+  /**
+   * SSRF guard, applied to the initial URL and to every redirect target.
+   * THREAT-MODEL.md §T-6: "re-checked on every redirect hop". Omitting it is only
+   * correct where the URL comes from the registry and cannot be attacker-chosen.
+   */
+  readonly guard?: ((url: string) => Promise<void>) | undefined;
   readonly timeoutMs?: number;
   readonly maxBytes?: number;
   readonly maxRedirects?: number;
@@ -37,6 +43,8 @@ export type SafeFetchOptions = {
   readonly etag?: string | undefined;
   readonly lastModified?: string | undefined;
   readonly signal?: AbortSignal;
+  /** Merged over the defaults. Used for GitHub's API version and authorization. */
+  readonly extraHeaders?: Record<string, string> | undefined;
   /** Injected in tests. Defaults to global fetch. */
   readonly fetchImpl?: typeof fetch;
 };
@@ -54,6 +62,12 @@ export type SafeFetchResult = {
   readonly redirects: number;
   /** True when the server answered 304 and there is nothing new to parse. */
   readonly notModified: boolean;
+  /**
+   * `x-ratelimit-*`, when the server sends them. Surfaced rather than swallowed
+   * because GitHub's 60/hour unauthenticated ceiling is a budget the caller has to
+   * track, and discovering it by receiving a 403 wastes the request that found out.
+   */
+  readonly rateLimitHeaders: Record<string, string | undefined> | undefined;
 };
 
 const ALLOWED_SCHEMES = new Set(['http:', 'https:']);
@@ -93,6 +107,12 @@ export async function safeFetch(
         throw new FetchLimitError('bad_scheme', `refusing to fetch scheme "${parsed.protocol}"`);
       }
 
+      // Inside the loop, so it runs again for every redirect target. A 302 into the
+      // cloud metadata service is the whole reason redirects are followed manually.
+      if (options.guard !== undefined) {
+        await options.guard(currentUrl);
+      }
+
       const headers: Record<string, string> = {
         'user-agent': USER_AGENT,
         accept:
@@ -102,6 +122,9 @@ export async function safeFetch(
       if (redirects === 0 && options.etag !== undefined) headers['if-none-match'] = options.etag;
       if (redirects === 0 && options.lastModified !== undefined) {
         headers['if-modified-since'] = options.lastModified;
+      }
+      if (options.extraHeaders !== undefined) {
+        Object.assign(headers, options.extraHeaders);
       }
 
       const response = await doFetch(currentUrl, {
@@ -172,7 +195,29 @@ function finish(
     elapsedMs: Date.now() - startedAt,
     redirects,
     notModified,
+    rateLimitHeaders: rateLimitHeaders(response),
   };
+}
+
+const RATE_LIMIT_HEADERS = [
+  'x-ratelimit-limit',
+  'x-ratelimit-remaining',
+  'x-ratelimit-reset',
+  'x-ratelimit-used',
+  'retry-after',
+] as const;
+
+function rateLimitHeaders(response: Response): Record<string, string | undefined> | undefined {
+  const found: Record<string, string | undefined> = {};
+  let any = false;
+  for (const name of RATE_LIMIT_HEADERS) {
+    const value = response.headers.get(name);
+    if (value !== null) {
+      found[name] = value;
+      any = true;
+    }
+  }
+  return any ? found : undefined;
 }
 
 /**

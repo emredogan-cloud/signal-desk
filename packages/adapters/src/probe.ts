@@ -149,6 +149,16 @@ export async function probeSource(
     return { ...common, outcome: 'http_error', error: `HTTP ${response.status}` };
   }
 
+  // A registered source that redirects to a DIFFERENT HOST means the registry has
+  // gone stale. It looks healthy here — the probe follows redirects — but ingestion
+  // refuses it, because the SSRF allowlist is built from registered hostnames and a
+  // cross-host hop lands outside it (THREAT-MODEL.md §T-6).
+  //
+  // Both current cases were found this way on the first LIVE ingest run rather than
+  // by the probe, which is the wrong order: the probe exists to catch registry drift
+  // before it costs a detection.
+  const redirectWarning = crossHostRedirectWarning(target.url, response.finalUrl);
+
   if (!FEED_PLATFORMS.has(target.platform)) {
     // html_diff: success means we got a page with content worth diffing. An empty
     // body behind a 200 is a failure even though the status says otherwise.
@@ -157,11 +167,18 @@ export async function probeSource(
       ...common,
       outcome: hasContent ? 'ok_page' : 'not_a_feed',
       itemCount: hasContent ? 1 : 0,
+      warning: redirectWarning,
       ...(hasContent ? {} : { error: '200 with an empty body' }),
     };
   }
 
-  return { ...common, ...classifyFeed(response.body) };
+  const classified = classifyFeed(response.body);
+  return {
+    ...common,
+    ...classified,
+    warning:
+      [classified.warning, redirectWarning].filter((w) => w !== undefined).join('; ') || undefined,
+  };
 }
 
 type FeedClassification = {
@@ -171,6 +188,40 @@ type FeedClassification = {
   error: string | undefined;
   warning: string | undefined;
 };
+
+/**
+ * Warn when a source redirects across hosts.
+ *
+ * Same-host redirects (http→https, a trailing slash) are noise. A different host is
+ * a registry fact: the publisher moved, and the registered URL should be updated to
+ * the destination rather than relying on a hop that ingestion will refuse.
+ *
+ * This check exists because both current cases — `status.anthropic.com` →
+ * `status.claude.com` and `docs.claude.com` → `platform.claude.com` — were found by
+ * the *first LIVE ingest run*, not by the probe. That is the wrong order. The probe
+ * follows redirects and so reported both as healthy, while ingestion refused them:
+ * the SSRF allowlist is built from registered hostnames and a cross-host hop lands
+ * outside it (THREAT-MODEL.md §T-6).
+ */
+function crossHostRedirectWarning(
+  registeredUrl: string,
+  finalUrl: string | undefined,
+): string | undefined {
+  if (finalUrl === undefined || finalUrl === registeredUrl) return undefined;
+
+  try {
+    const from = new URL(registeredUrl).host;
+    const to = new URL(finalUrl).host;
+    if (from === to) return undefined;
+
+    return (
+      `redirects to a different host (${from} → ${to}). Ingestion will REFUSE this: the ` +
+      `SSRF allowlist is built from registered hostnames. Update the registry to ${finalUrl}`
+    );
+  } catch {
+    return undefined;
+  }
+}
 
 /** `true` when well-formed, otherwise a human-readable description of the fault. */
 function xmlFault(body: string): string | undefined {

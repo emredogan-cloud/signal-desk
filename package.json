@@ -28,7 +28,8 @@
     "web:dev": "pnpm --filter @signal-desk/web run dev",
     "db:seed": "tsx --conditions=development apps/worker/src/cli/seed.ts",
     "sources:probe": "tsx --conditions=development apps/worker/src/cli/sources-probe.ts",
-    "sources:add": "tsx --conditions=development apps/worker/src/cli/sources-add.ts"
+    "sources:add": "tsx --conditions=development apps/worker/src/cli/sources-add.ts",
+    "ingest:once": "tsx --conditions=development apps/worker/src/cli/ingest.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

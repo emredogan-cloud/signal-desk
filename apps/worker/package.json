@@ -9,6 +9,7 @@
     "@signal-desk/ai": "workspace:*",
     "@signal-desk/core": "workspace:*",
     "@signal-desk/db": "workspace:*",
-    "@signal-desk/shared": "workspace:*"
+    "@signal-desk/shared": "workspace:*",
+    "croner": "^10.0.1"
   }
 }

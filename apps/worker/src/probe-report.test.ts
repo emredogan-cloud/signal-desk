@@ -40,6 +40,9 @@ function source(id: string, priority: number): SourceRow {
     lastEventAt: null,
     verifiedAt: null,
     expectedValue: '',
+    consecutiveFailures: 0,
+    circuitOpenUntil: null,
+    lastErrorMessage: null,
     createdAt: now,
     updatedAt: now,
   };

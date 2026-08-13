@@ -40,6 +40,24 @@ a stray `em>`, and then a **second concatenated document** from a `netlify.app` 
 warning rather than failing it — rejecting a working source over a publisher's build bug would be
 the wrong trade, and hiding the bug would be the other wrong trade. See `packages/adapters/src/probe.ts`.
 
+### Two hosts moved, found by the first LIVE ingest run
+
+The Phase-2 probe reported both of these as healthy, because a probe follows
+redirects. Ingestion refused them, because the SSRF allowlist is built from
+**registered** hostnames and a cross-host hop lands outside it (`THREAT-MODEL.md`
+§T-6). The allowlist was right and the registry was stale.
+
+| Registered as                               | Actually serves                                                | Status                                                                                            |
+| ------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `status.anthropic.com/history.rss`          | **`status.claude.com/history.rss`** (302)                      | Anthropic moved its status page to the claude.com domain. Registry updated to the canonical host. |
+| `docs.claude.com/en/release-notes/overview` | **`platform.claude.com/docs/en/release-notes/overview`** (301) | Registry updated.                                                                                 |
+
+`pnpm sources:probe` now **warns on any cross-host redirect** and names the
+destination, so this class of drift surfaces at probe time rather than costing a
+detection. Finding it the other way round — ingestion failing on a Priority-1 source
+while the health check said green — is precisely the T-9 shape this registry exists
+to prevent.
+
 ### Why `anthropic.com/news` and not the release-notes page
 
 Both were probed. Both are server-rendered, so both are diffable. The news page wins on three counts:

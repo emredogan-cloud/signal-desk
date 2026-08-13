@@ -83,6 +83,16 @@ export const sources = sqliteTable(
     /** Free text: what this source is for. Read by a human, not by code. */
     expectedValue: text('expected_value'),
 
+    // ─── Circuit breaker — THREAT-MODEL.md §T-10 ───────────────────────
+    // Per-source rather than global: one feed returning 500s must not stop the
+    // other 59, and hammering a struggling host is how a polite client becomes a
+    // blocked one (§T-8).
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    /** While set and in the future, the scheduler skips this source entirely. */
+    circuitOpenUntil: timestamp('circuit_open_until'),
+    /** Why the breaker opened. Shown on the health panel; cleared on success. */
+    lastErrorMessage: text('last_error_message'),
+
     createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at').notNull(),
   },
@@ -156,9 +166,110 @@ export const entityAliases = sqliteTable(
   ],
 );
 
+/**
+ * Everything fetched, exactly as fetched. ARCHITECTURE.md §7.
+ *
+ * **This table is append-only.** Nothing in the codebase updates or deletes a row,
+ * and that is the property the rest of the system is built on:
+ *
+ *   - Phase 4's clustering is a *derived* view. Change the algorithm, re-run it over
+ *     these rows, compare. No re-fetching, no lost history.
+ *   - Phase 12's weight refitting replays three months of real history offline at
+ *     **zero API cost**, which is only possible because the inputs were kept.
+ *   - "Why didn't we detect this?" is answerable by looking at what actually arrived
+ *     rather than at what the pipeline concluded.
+ *
+ * `rawPayload` keeps the original serialised item rather than only the parsed
+ * fields, because a parser bug found in six months can then be fixed retroactively.
+ */
+export const rawItems = sqliteTable(
+  'raw_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sourceId: text('source_id')
+      .notNull()
+      .references(() => sources.id, { onDelete: 'restrict' }),
+
+    /** The publisher's own id — RSS `<guid>`, Atom `<id>`. Falls back to the URL. */
+    externalId: text('external_id').notNull(),
+
+    url: text('url').notNull(),
+    title: text('title').notNull(),
+    /** Untrusted. Stored verbatim; sanitisation happens downstream in Phase 4. */
+    body: text('body').notNull(),
+    author: text('author'),
+
+    /** The publisher's timestamp. Null when the feed omits one — which is common,
+     *  and must not be silently replaced with `fetchedAt` or every such item looks
+     *  brand new forever. */
+    publishedAt: timestamp('published_at'),
+    fetchedAt: timestamp('fetched_at').notNull(),
+
+    /** SHA-256 over the normalised title+body+url. Deduplication stage 1
+     *  (ARCHITECTURE.md §5) and the html_diff change detector. */
+    contentHash: text('content_hash').notNull(),
+
+    /** The original serialised item, for replay after a parser fix. */
+    rawPayload: text('raw_payload').notNull(),
+
+    /** Follows one item from fetch to analysis (ARCHITECTURE.md §9). */
+    traceId: text('trace_id').notNull(),
+    httpStatus: integer('http_status'),
+  },
+  (table) => [
+    // The publisher's id is the primary dedup key. A feed that re-serves the same
+    // item on every poll — which most do — must insert once.
+    uniqueIndex('raw_items_source_external_uq').on(table.sourceId, table.externalId),
+    index('raw_items_content_hash_idx').on(table.contentHash),
+    index('raw_items_fetched_at_idx').on(table.fetchedAt),
+    index('raw_items_published_at_idx').on(table.publishedAt),
+    index('raw_items_source_idx').on(table.sourceId),
+  ],
+);
+
+/**
+ * Per-source, per-run fetch telemetry. THREAT-MODEL.md §T-9 and ARCHITECTURE.md §9.
+ *
+ * Separate from the counters on `sources` because those answer "what is the state
+ * now" and this answers "what has been happening" — the second is what turns
+ * "the feed looks quiet" into "the feed started 304ing on Tuesday and stopped
+ * producing items on Thursday".
+ */
+export const fetchLog = sqliteTable(
+  'fetch_log',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sourceId: text('source_id')
+      .notNull()
+      .references(() => sources.id, { onDelete: 'cascade' }),
+    startedAt: timestamp('started_at').notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    outcome: text('outcome').notNull(),
+    httpStatus: integer('http_status'),
+    /** Items parsed out of the response. */
+    itemsFound: integer('items_found').notNull().default(0),
+    /** Items that were new. `found > 0, new = 0` is the normal steady state. */
+    itemsNew: integer('items_new').notNull().default(0),
+    bytes: integer('bytes').notNull().default(0),
+    /** True when the server answered 304 — free bandwidth, no parsing. */
+    notModified: integer('not_modified', { mode: 'boolean' }).notNull().default(false),
+    error: text('error'),
+    traceId: text('trace_id').notNull(),
+  },
+  (table) => [
+    index('fetch_log_source_started_idx').on(table.sourceId, table.startedAt),
+    index('fetch_log_started_idx').on(table.startedAt),
+  ],
+);
+
 export type SourceRow = typeof sources.$inferSelect;
 export type NewSourceRow = typeof sources.$inferInsert;
 export type EntityRow = typeof entities.$inferSelect;
 export type NewEntityRow = typeof entities.$inferInsert;
 export type EntityAliasRow = typeof entityAliases.$inferSelect;
 export type NewEntityAliasRow = typeof entityAliases.$inferInsert;
+
+export type RawItemRow = typeof rawItems.$inferSelect;
+export type NewRawItemRow = typeof rawItems.$inferInsert;
+export type FetchLogRow = typeof fetchLog.$inferSelect;
+export type NewFetchLogRow = typeof fetchLog.$inferInsert;
