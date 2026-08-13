@@ -1,0 +1,37 @@
+# Secrets — present from the first commit, before any key exists
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Data — never commit the database or fetched third-party content
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Dependencies / build output
+node_modules/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+coverage/
+
+# Model caches (local ONNX embeddings)
+.models/
+.cache/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs / scratch
+*.log
+tmp/
+.tmp/
