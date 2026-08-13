@@ -38,7 +38,8 @@
     "analyze": "tsx --conditions=development apps/worker/src/cli/analyze.ts",
     "strategy": "tsx --conditions=development apps/worker/src/cli/strategy.ts",
     "trend": "tsx --conditions=development apps/worker/src/cli/trend.ts",
-    "alerts": "tsx --conditions=development apps/worker/src/cli/alerts.ts"
+    "alerts": "tsx --conditions=development apps/worker/src/cli/alerts.ts",
+    "replay": "tsx --conditions=development apps/worker/src/cli/replay.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

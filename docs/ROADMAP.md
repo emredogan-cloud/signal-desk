@@ -1339,7 +1339,23 @@ the operator believing he was covered.
 
 ---
 
-## ☐ Phase 12 — Analytics and the feedback loop
+## ◐ Phase 12 — Analytics and the feedback loop
+
+> **PARTIALLY COMPLETE 2026-08-13.** Tag `phase-12-complete`. 971 tests, CI green.
+>
+> **The offline replay engine works and is measured:** 5,007 real events, middle 90%
+> spanning **2,428 days**, five candidate weightings, **$0 API cost**. Candidates
+> disagree meaningfully (67%–100% agreement with the shipped weights), which is what
+> makes the machinery useful rather than decorative.
+>
+> **The refit itself has NOT happened and cannot yet.** Fitting weights requires
+> measured outcomes; outcomes require posts; posts require the operator and X
+> credentials. Writing "refitted" weights against no outcomes would be fabricating the
+> measurement this phase exists to produce. **The guesses stay, labelled as guesses.**
+>
+> The roadmap's exit criterion is explicit that this is not done: _"This phase is where
+> the system starts learning; a green CI with unfitted weights does not satisfy it."_
+> That is the correct reading, and it is recorded rather than worked around.
 
 **OBJECTIVE** Measure what actually built authority, and use it to fix the scoring.
 
@@ -1377,6 +1393,58 @@ the operator believing he was covered.
 weights does not satisfy it.
 
 **ROLLBACK** Weights are constants; revert the file.
+
+### Phase 12 outcome — 2026-08-13
+
+| Acceptance criterion                                                          | Result                                                                                             |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| ≥30 posts attributed to recommendations with outcomes recorded                | ⏳ **PENDING-OPERATOR** — zero posts exist                                                         |
+| Visibility / authority / audience / quality reported separately, never merged | ✅ the `Dimensions` type has **no** combined field and no function produces one; a test asserts it |
+| Offline replay runs over ≥3 months of history at $0 API cost                  | ✅ **5,007 events, middle 90% spanning 2,428 days, no network calls**                              |
+| **Refitted weights written into the constants file, replacing the guesses**   | ❌ **NOT DONE, and cannot be** — see below                                                         |
+| The velocity-proxy assumption explicitly validated or discarded               | ◐ **explicitly NOT validated** — recorded below rather than left ambiguous                         |
+| X spend stays within `X_DAILY_BUDGET_USD`                                     | ✅ trivially — no X calls have been made                                                           |
+
+**Why the refit did not happen.** Fitting weights means choosing the candidate whose
+surfaced events produced the best outcomes. There are no outcomes. Running the fitting
+code against an empty outcome set would produce numbers, and those numbers would be
+noise wearing the label "measured" — which is worse than a guess honestly labelled as
+one. The five candidates are recorded and the machinery is proven; the choice waits
+for data.
+
+**Two Phase-3/5 decisions are what made a $0 replay possible**, and neither cost
+anything at the time:
+
+1. `raw_items` is append-only and immutable, so history survives whatever the pipeline
+   did to it later.
+2. `scoreEvent` and `applyGate` take `now` as a **parameter** rather than reading the
+   clock. A scorer calling `Date.now()` internally would make every replay meaningless
+   _while appearing to work_ — the replay would silently re-age every event to today.
+
+**The velocity proxy is explicitly NOT validated.** Phase 5 introduced HN/Reddit/GitHub
+activity as a substitute for the X velocity that pricing removed, labelled INFERRED.
+Validating it requires correlating the proxy against real X velocity, which requires
+X reads, which require credentials. It remains INFERRED, weighted at 0.12 of importance
+precisely so that discarding it later does bounded damage. Saying "we checked and it
+seems fine" would be the overclaim this system exists to avoid.
+
+**Low-quality virality is classified explicitly**, because it is the failure mode the
+whole project is built against and it looks like success on any dashboard reporting a
+single number: 90,000 impressions, 400 reposts, and nobody worth hearing from in the
+replies. `classifyOutcome` names it, and ranks it _below_ a 1,200-impression post that
+earned three high-signal replies.
+
+**Known gaps carried forward.**
+
+1. Candidate weights are applied as **axis multipliers**, not per-component. That
+   explores the _shape_ of the weighting, not its detail. A true per-component refit
+   needs the constants file to be parameterised, which is worth doing only once there
+   are outcomes to fit against.
+2. Attribution (recommendation → post → outcome) is **specified and not built**. It has
+   nothing to attribute.
+3. The corpus's full date range is 9,375 days, inflated by a few items with implausible
+   publisher dates. The replay reports both the full range and the middle-90% span
+   rather than quoting the misleading number.
 
 ---
 
