@@ -849,7 +849,16 @@ weights against measured outcomes, and that is the right time to reconcile them.
 
 ---
 
-## ☐ Phase 7 — X content strategy engine
+## ◐ Phase 7 — X content strategy engine
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-7-complete`. 791 tests, CI green.
+>
+> **MEASURED restraint: 50.8%** over the 65 gate survivors (DONT_POST 16.9% +
+> WAIT 32.3% + VERIFY 1.5%), against the ≥30% target.
+>
+> **Outstanding: `PENDING-OPERATOR`** — "Operator judges ≥60% of QUOTE-NOW
+> recommendations as ones he would actually act on." `pnpm strategy -- --top` prints
+> them with the full WHY NOW / WHY ME / WHAT CAN I ADD / EXPECTED OUTCOME panel.
 
 **OBJECTIVE** For each high-priority event, produce the five options — quote / reply / original /
 educational / wait — plus the one decisive recommendation and its reasoning.
@@ -889,6 +898,54 @@ id. Recommendation distribution over a week of real events includes a meaningful
 **EXIT CRITERIA** Above.
 
 **ROLLBACK** Derived from analyses; regenerate.
+
+### Phase 7 outcome — 2026-08-13
+
+| Acceptance criterion                                                                     | Result                                                                                                |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Every high-priority event produces all five options with distinct, non-generic reasoning | ✅ tested across five event shapes; the five rationales must be pairwise distinct                     |
+| **≥30% of scored events receive DON'T POST or WAIT**                                     | ✅ **50.8% measured** over the 65 gate survivors                                                      |
+| No generated commentary contains an unsourced number                                     | ✅ inherited from Phase 6 provenance validation; the strategy layer generates no new numbers          |
+| Accusation and rumour forcing rules pass adversarial tests                               | ✅ 15 forcing cases + 4 explicit "talk it out of the rule" attempts + all 35 hostile corpus documents |
+| Operator judges ≥60% of QUOTE-NOW recommendations as actionable                          | ⏳ **PENDING-OPERATOR**                                                                               |
+
+**The first restraint measurement failed at 20.6%**, and both causes were real bugs
+rather than a mis-set threshold:
+
+1. **The CLI hardcoded `expertSourceCount: 0`**, which silently disabled three of the
+   seven DON'T POST reasons — `saturated` and `better_explained_elsewhere` cannot fire
+   without it. It is now derived from the evidence's source categories.
+2. **It ran over all 5,000 scored events**, of which the Phase 5 rule gate had already
+   killed 4,942. Asking "should he post about this?" of an event the pipeline already
+   rejected is a question with no meaning, and the answers made the distribution
+   describe a population the operator never sees. The strategy layer now runs over gate
+   survivors only, matching the pipeline.
+
+**Forcing rules run FIRST, before any positive recommendation.** That ordering is what
+makes them unbypassable: there is nothing for a positive decision to argue with. An
+event scoring 100 on every axis, fresh, testable, and uncrowded is still forced to
+WAIT if its title reads as a rumour — tested directly. This is the same pattern as the
+Phase 5 confidence caps and the Phase 6 output caps: **compute, then cap in code,
+never in a prompt.**
+
+**An accusation is escalated, not merely delayed.** A rumour that proves false costs a
+correction; an unverified accusation amplified by the operator damages a third party
+who had no say in it. So accusations force VERIFY _and_ set `manualFlag`.
+
+**A correction the tests forced.** At LOW confidence the `original` option still
+outranked `wait`, because option fit measured how well an option suited the event and
+ignored whether the evidence could support saying anything at all. Every publishing
+option is now discounted by confidence; `wait` is exempt, because waiting gets better
+as confidence falls.
+
+**Known gaps carried forward.**
+
+1. `stillUnknown` and `doNotSay` come from the Phase 6 analysis, and no event has one
+   yet — nothing cleared `AI_ANALYSIS_THRESHOLD`. So `insufficient_information` and
+   `reputational_risk` are implemented and tested but have never fired on real data.
+2. Angle applicability is regex-driven over titles and summaries. It is explainable
+   and free, and it will miss angles a reader would spot.
+3. `EARLY_WINDOW_HOURS = 6` is a guess, like the Phase 5 weights.
 
 ---
 

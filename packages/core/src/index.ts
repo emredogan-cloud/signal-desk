@@ -28,3 +28,4 @@ export * from './cluster/labelled-fixtures.js';
 export * from './cluster/measure.js';
 export * from './score/index.js';
 export * from './security/injection-corpus.js';
+export * from './strategy/index.js';

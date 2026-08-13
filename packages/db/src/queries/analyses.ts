@@ -160,6 +160,7 @@ export function envelopeItemsFor(
   url: string;
   publishedAt: string;
   isOfficial: boolean;
+  sourceCategory: string;
 }[] {
   return db
     .all<{
@@ -171,12 +172,13 @@ export function envelopeItemsFor(
       publishedAt: number | null;
       fetchedAt: number;
       isOfficial: number;
+      sourceCategory: string;
     }>(
       sql`
       select ev.id as evidenceId, ev.source_id as sourceId,
              ri.title as title, coalesce(ri.body, '') as body,
              ri.url as url, ri.published_at as publishedAt, ri.fetched_at as fetchedAt,
-             s.is_official as isOfficial
+             s.is_official as isOfficial, s.category as sourceCategory
       from evidence ev
       join raw_items ri on ri.id = ev.raw_item_id
       join sources s on s.id = ev.source_id
@@ -194,6 +196,7 @@ export function envelopeItemsFor(
       url: row.url,
       publishedAt: new Date(row.publishedAt ?? row.fetchedAt).toISOString(),
       isOfficial: row.isOfficial === 1,
+      sourceCategory: row.sourceCategory,
     }));
 }
 
