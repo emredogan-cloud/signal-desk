@@ -1,5 +1,18 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { SOURCE_CATEGORIES, SOURCE_PLATFORMS, ENTITY_KINDS } from '@signal-desk/shared';
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  blob,
+  index,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
+import {
+  SOURCE_CATEGORIES,
+  SOURCE_PLATFORMS,
+  ENTITY_KINDS,
+  EVENT_CATEGORIES,
+} from '@signal-desk/shared';
 
 /**
  * Database schema. ARCHITECTURE.md §7 lists the full set of tables; they land in the
@@ -273,3 +286,164 @@ export type RawItemRow = typeof rawItems.$inferSelect;
 export type NewRawItemRow = typeof rawItems.$inferInsert;
 export type FetchLogRow = typeof fetchLog.$inferSelect;
 export type NewFetchLogRow = typeof fetchLog.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase 4 — canonical events. ARCHITECTURE.md §5.
+//
+// `events` is a DERIVED table. Everything in it can be recomputed from
+// `raw_items`, which is why clustering can be changed and re-run over real
+// history rather than only over whatever arrives next.
+// ─────────────────────────────────────────────────────────────────────
+
+export const events = sqliteTable(
+  'events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    title: text('title').notNull(),
+    summary: text('summary').notNull(),
+    category: text('category', { enum: EVENT_CATEGORIES }).notNull(),
+
+    /** Canonical entity slugs, JSON array. Denormalised deliberately: it is read on
+     *  every clustering pass and never queried relationally. */
+    entities: text('entities', { mode: 'json' }).$type<string[]>().notNull(),
+    /** `{ models, versions, repos }`. The stage-2 dedup key. */
+    artifacts: text('artifacts', { mode: 'json' })
+      .$type<{
+        models: string[];
+        versions: string[];
+        repos: string[];
+        titleModels: string[];
+        titleVersions: string[];
+      }>()
+      .notNull(),
+
+    /** When we first saw it. The latency KPI's denominator. */
+    firstSeenAt: timestamp('first_seen_at').notNull(),
+    /** When it happened, per the publisher. The KPI's numerator. */
+    eventOccurredAt: timestamp('event_occurred_at').notNull(),
+    /** True when no publisher timestamp existed and `fetchedAt` stood in. A latency
+     *  measurement over these rows measures nothing, and must exclude them. */
+    occurredAtIsEstimated: integer('occurred_at_is_estimated', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    updatedAt: timestamp('updated_at').notNull(),
+
+    /** The most authoritative evidence, by source category — not by arrival order. */
+    primarySourceId: text('primary_source_id')
+      .notNull()
+      .references(() => sources.id, { onDelete: 'restrict' }),
+    primaryRawItemId: integer('primary_raw_item_id')
+      .notNull()
+      .references(() => rawItems.id, { onDelete: 'restrict' }),
+
+    status: text('status', {
+      enum: ['new', 'triaged', 'analyzed', 'actioned', 'ignored', 'expired'],
+    })
+      .notNull()
+      .default('new'),
+
+    /** Count of attached evidence rows. Denormalised for the stream view. */
+    evidenceCount: integer('evidence_count').notNull().default(0),
+    /** How many distinct sources corroborate. Feeds confidence in Phase 5. */
+    distinctSourceCount: integer('distinct_source_count').notNull().default(1),
+    /** True when at least one OFFICIAL_SOURCE backs it. Confidence is capped
+     *  otherwise (THREAT-MODEL.md §T-2 mitigation 4). */
+    hasOfficialSource: integer('has_official_source', { mode: 'boolean' }).notNull().default(false),
+
+    /** §T-1 mitigation 6: flagged, stored, surfaced — never silently dropped. */
+    injectionFlagged: integer('injection_flagged', { mode: 'boolean' }).notNull().default(false),
+
+    /** Set when this event was merged into another. Non-null means "not canonical". */
+    mergedIntoEventId: integer('merged_into_event_id'),
+  },
+  (table) => [
+    index('events_occurred_idx').on(table.eventOccurredAt),
+    index('events_first_seen_idx').on(table.firstSeenAt),
+    index('events_category_idx').on(table.category),
+    index('events_status_idx').on(table.status),
+    index('events_merged_idx').on(table.mergedIntoEventId),
+  ],
+);
+
+/** `raw_item` → `event`, with the role that item plays. ARCHITECTURE.md §7. */
+export const evidence = sqliteTable(
+  'evidence',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    eventId: integer('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    rawItemId: integer('raw_item_id')
+      .notNull()
+      .references(() => rawItems.id, { onDelete: 'cascade' }),
+    sourceId: text('source_id')
+      .notNull()
+      .references(() => sources.id, { onDelete: 'restrict' }),
+
+    role: text('role', { enum: ['primary', 'corroborating', 'reaction'] }).notNull(),
+    /** Which dedup stage attached it, and how confidently. Rendered in the UI so a
+     *  merge the operator disagrees with can be understood before it is undone. */
+    mergeStage: integer('merge_stage'),
+    similarity: real('similarity'),
+
+    canonicalUrl: text('canonical_url').notNull(),
+    contentHash: text('content_hash').notNull(),
+    attachedAt: timestamp('attached_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('evidence_raw_item_uq').on(table.rawItemId),
+    index('evidence_event_idx').on(table.eventId),
+    index('evidence_source_idx').on(table.sourceId),
+  ],
+);
+
+/** Embeddings, one per event. Raw float32 bytes: the format `sqlite-vec` reads, and
+ *  half the size of a JSON array. */
+export const eventEmbeddings = sqliteTable('event_embeddings', {
+  eventId: integer('event_id')
+    .primaryKey()
+    .references(() => events.id, { onDelete: 'cascade' }),
+  model: text('model').notNull(),
+  dimensions: integer('dimensions').notNull(),
+  embedding: blob('embedding', { mode: 'buffer' }).$type<Buffer>().notNull(),
+  /** The exact text embedded, so a re-embed after a model change is reproducible. */
+  sourceText: text('source_text').notNull(),
+  createdAt: timestamp('created_at').notNull(),
+});
+
+/**
+ * Every merge and unmerge. ARCHITECTURE.md §5: "Merges are **reversible.** Every
+ * merge writes an audit row; the dashboard has an 'unmerge' action."
+ *
+ * The row carries enough to reverse the operation exactly — which event the item came
+ * from, which it went to, and why. Without the `from` side, an unmerge can only guess
+ * where to put things back.
+ */
+export const mergeAudit = sqliteTable(
+  'merge_audit',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    action: text('action', { enum: ['merge', 'unmerge', 'split'] }).notNull(),
+    rawItemId: integer('raw_item_id').notNull(),
+    fromEventId: integer('from_event_id'),
+    toEventId: integer('to_event_id'),
+    stage: integer('stage'),
+    similarity: real('similarity'),
+    reason: text('reason').notNull(),
+    /** 'pipeline' or 'operator'. An operator unmerge must never be undone by the
+     *  pipeline re-merging the same item on the next pass. */
+    actor: text('actor', { enum: ['pipeline', 'operator'] }).notNull(),
+    createdAt: timestamp('created_at').notNull(),
+  },
+  (table) => [
+    index('merge_audit_raw_item_idx').on(table.rawItemId),
+    index('merge_audit_event_idx').on(table.toEventId),
+  ],
+);
+
+export type EventRow = typeof events.$inferSelect;
+export type NewEventRow = typeof events.$inferInsert;
+export type EvidenceRow = typeof evidence.$inferSelect;
+export type NewEvidenceRow = typeof evidence.$inferInsert;
+export type EventEmbeddingRow = typeof eventEmbeddings.$inferSelect;
+export type MergeAuditRow = typeof mergeAudit.$inferSelect;

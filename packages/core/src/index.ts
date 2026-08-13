@@ -8,8 +8,8 @@
  *
  * Contents by phase:
  *   Phase 2 — entities/    the entity + alias registry and resolver
- *   Phase 4 — normalize/   sanitisation, CanonicalEvent construction
- *   Phase 4 — cluster/     three-stage deduplication
+ *   Phase 4 — normalize/   sanitisation, artifact extraction, CanonicalEvent drafts
+ *   Phase 4 — cluster/     three-stage deduplication, embedder contract
  *   Phase 5 — score/       importance, brand relevance, confidence, the rule gate
  *   Phase 6 — analyze/     prompt assembly and AI orchestration
  *   Phase 7 — strategy/    X options, DON'T POST, experiment generator
@@ -17,3 +17,12 @@
  */
 
 export * from './entities/registry.js';
+export * from './normalize/sanitize.js';
+export * from './normalize/artifacts.js';
+export * from './normalize/url.js';
+export { contentHash as contentHashFor } from './normalize/content-hash.js';
+export * from './normalize/normalize.js';
+export * from './cluster/dedup.js';
+export * from './cluster/embedder.js';
+export * from './cluster/labelled-fixtures.js';
+export * from './cluster/measure.js';

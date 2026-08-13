@@ -222,9 +222,58 @@ evidence; the launch post is the record.
 | 2     | Entity + artifact + time-window match — same entity, same version/model string, within 48h                                                          | "Anthropic ships Claude X" from 6 outlets  | ~0                |
 | 3     | Embedding cosine similarity (`bge-small`, sqlite-vec) over title+summary, threshold ~0.86, restricted to same-category candidates within the window | Paraphrases with no shared artifact string | local CPU, no API |
 
-Stage 3's threshold is a **starting guess, not a validated number.** Phase 4's acceptance criterion
-is a labelled fixture set with measured precision/recall — the number gets tuned there, and the
-document gets updated with the measured value.
+### MEASURED — 2026-08-13, replacing the 0.86 guess
+
+Stage 3's threshold **was** a starting guess. It is now **0.80**, measured against the labelled set
+(`fixtures/labelled/`) with the real `bge-small-en-v1.5` embedder. Reproduce with
+`pnpm measure:dedup`.
+
+| Threshold              | Precision  | Recall     | Wrong merges | Missed |
+| ---------------------- | ---------- | ---------- | ------------ | ------ |
+| 0.78                   | 1.0000     | 1.0000     | 0            | 0      |
+| **0.80 — in use**      | **1.0000** | **0.9500** | **0**        | **1**  |
+| 0.86 _(the old guess)_ | 1.0000     | 0.9000     | 0            | 2      |
+| 0.95                   | 1.0000     | 0.9000     | 0            | 2      |
+
+**Acceptance criteria: precision ≥0.95 ✅ (1.0000), recall ≥0.85 ✅ (0.9500).**
+Real-provenance clusters alone score 1.0000 / 1.0000.
+
+**0.80 rather than the measured optimum of 0.78, deliberately.** The labelled set is 25 items and
+300 pairs — small enough that its exact optimum is a property of the sample. Precision is 1.0 across
+the entire sweep because the _artifact-conflict rule_ is what protects it, not the threshold; the
+threshold's remaining job is guarding the case the set under-represents, which is two items carrying
+no artifacts on either side that merge on prose alone.
+
+### Three rules the measurement forced, none of which were in the original design
+
+**1. Different identity artifacts BLOCK a stage-3 merge, at any similarity.**
+`llama.cpp b10400` and `b10405` embed at cosine **0.9649** — their text is nearly identical. They are
+two releases, and merging them hides one. Artifacts are the higher-precision identity signal and
+override textual similarity. (Absence is not disagreement: an item with no artifacts conflicts with
+nothing.)
+
+**2. A repository is a container, not an identity.** Every `llama.cpp` release shares
+`repo:ggml-org/llama.cpp`. Treating that as a stage-2 identity artifact merged **seven consecutive
+builds into one event**. Only model ids and version strings identify an event now.
+
+**3. An artifact in a title is a claim; an artifact in a body is a mention.** Five unrelated arXiv
+papers merged because each abstract said "gpt-4o" — they all _evaluated_ the model, none of them
+_was_ its release. Stage-2 identity requires the artifact to appear in the **title**, which is where
+a launch names the thing it is launching.
+
+> Rules 2 and 3 were invisible to the 25-item labelled set and appeared within seconds of running
+> the pipeline over **5,208 real items**. A curated set cannot exhibit a failure that needs seven
+> releases of one repository inside one window. This is what the phase's "a week of live data
+> reviewed by eye" exit criterion is for, and it earned its place on the first run.
+
+### Category is a signal, not a gate
+
+This section previously restricted stage 3 to same-category candidates. Measurement showed that
+costs more than it buys: rule-based category inference is noisy, and the restriction split three
+genuine clusters — an outage reported by a status page (`software`) and by Hacker News (`ai`), and a
+model release whose vendor post mentioned a licence (`policy_platform`) while the community thread
+mentioned benchmarks (`ai`). A category mismatch now demands **+0.04** similarity instead of
+disqualifying outright.
 
 Merges are **reversible.** Every merge writes an audit row; the dashboard has an "unmerge" action.
 A silent wrong merge hides an event, which is a worse failure than a visible duplicate.

@@ -7,6 +7,7 @@ export * from './seed/entities.js';
 export * from './seed/apply.js';
 export * from './queries/sources.js';
 export * from './queries/raw-items.js';
+export * from './queries/events.js';
 
 /**
  * Absolute path to the migrations folder, resolved from this module rather than from

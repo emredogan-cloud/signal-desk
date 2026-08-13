@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import type { RawItem } from './types.js';
 
@@ -112,19 +111,12 @@ function parseAuthor(node: XmlNode): string | undefined {
 }
 
 /**
- * Stable content hash. Deduplication stage 1 (ARCHITECTURE.md §5).
- *
- * Hashes the *normalised* title, URL, and body so that a publisher re-serialising
- * the same item with different whitespace does not read as a change. Deliberately
- * excludes timestamps: several feeds rewrite `pubDate` on every build, and including
- * it would make every poll look like new content.
+ * Stage-1 content hashing lives in `@signal-desk/core` so that ingestion and
+ * clustering compute the same value from the same code. Two implementations that
+ * drift apart would silently stop deduplicating, and nothing would report it.
  */
-export function contentHash(parts: { title: string; url: string; body: string }): string {
-  const normalise = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase();
-  return createHash('sha256')
-    .update(`${normalise(parts.title)}\n${normalise(parts.url)}\n${normalise(parts.body)}`)
-    .digest('hex');
-}
+import { contentHashFor } from '@signal-desk/core';
+export { contentHashFor as contentHash };
 
 export type ParsedFeed = {
   readonly items: readonly RawItem[];
@@ -240,7 +232,7 @@ function toRawItem(sourceId: string, node: XmlNode): RawItem | undefined {
     body,
     author: parseAuthor(node),
     publishedAt: parseDate(node),
-    contentHash: contentHash({ title, url, body }),
+    contentHash: contentHashFor({ title, url, body }),
     rawPayload: JSON.stringify(node),
   };
 }

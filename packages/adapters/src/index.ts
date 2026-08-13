@@ -28,5 +28,6 @@ export * from './feed-adapter.js';
 export * from './html-diff.js';
 export * from './github-api.js';
 export * from './mock.js';
+export * from './embeddings.js';
 export * from './probe.js';
 export * from './registry.js';

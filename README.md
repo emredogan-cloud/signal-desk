@@ -138,4 +138,5 @@ Phase 6. Embeddings run locally, the database is a file, and hosting is currentl
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
 # signal-desk

@@ -29,7 +29,11 @@
     "db:seed": "tsx --conditions=development apps/worker/src/cli/seed.ts",
     "sources:probe": "tsx --conditions=development apps/worker/src/cli/sources-probe.ts",
     "sources:add": "tsx --conditions=development apps/worker/src/cli/sources-add.ts",
-    "ingest:once": "tsx --conditions=development apps/worker/src/cli/ingest.ts"
+    "ingest:once": "tsx --conditions=development apps/worker/src/cli/ingest.ts",
+    "cluster": "tsx --conditions=development apps/worker/src/cli/cluster.ts",
+    "embeddings:warm": "tsx --conditions=development apps/worker/src/cli/warm-embeddings.ts",
+    "labelled:build": "tsx --conditions=development apps/worker/src/cli/build-labelled-set.ts",
+    "measure:dedup": "tsx --conditions=development apps/worker/src/cli/measure-dedup.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

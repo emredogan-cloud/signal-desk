@@ -481,7 +481,18 @@ registry exists to prevent, and it had reproduced itself inside the tooling.
 
 ---
 
-## ☐ Phase 4 — Normalisation, clustering, deduplication
+## ◐ Phase 4 — Normalisation, clustering, deduplication
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-4-complete`. Five of six acceptance
+> criteria met and measured; the sixth is `PENDING-ELAPSED`. 519 tests.
+>
+> **Measured: precision 1.0000, recall 0.9500** (bar: ≥0.95 / ≥0.85). The 0.86 guess
+> is replaced by a measured **0.80** in `ARCHITECTURE.md` §5.
+>
+> **Outstanding: `PENDING-ELAPSED`** — the exit criterion is "a week of live data
+> reviewed by eye, with any misclustering added to the labelled set as a regression
+> case". One pass over 5,208 real items has been reviewed and produced three
+> corrections (below); a week has not elapsed.
 
 **OBJECTIVE** Many source items become one canonical event with attached evidence.
 
@@ -523,6 +534,77 @@ labelled set as a regression case.
 
 **ROLLBACK** Clustering runs over immutable `raw_items`. Any change can be re-run from scratch;
 `events` is a derived table.
+
+### Phase 4 outcome — 2026-08-13
+
+| Acceptance criterion                                                                           | Result                                                                                          |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Dedup precision ≥0.95 and recall ≥0.85, **measured numbers written into `ARCHITECTURE.md` §5** | ✅ **precision 1.0000, recall 0.9500**; threshold **0.86 → 0.80**, recorded with the full sweep |
+| The six-outlet launch case produces exactly one event with six evidence rows                   | ✅                                                                                              |
+| The two-models-same-day case produces two events                                               | ✅                                                                                              |
+| Unmerge restores prior state exactly                                                           | ✅ transactional; also re-points the primary and recomputes aggregates                          |
+| Sanitiser neutralises every case in the hidden-text fixture set                                | ✅ 8-document corpus; every one neutralised **and flagged**                                     |
+| Full pipeline replay over `raw_items` is deterministic                                         | ✅ asserted by rebuilding and comparing an event signature                                      |
+| **A week of live data reviewed by eye** (exit criterion)                                       | ⏳ **PENDING-ELAPSED** — one pass reviewed, a week has not elapsed                              |
+
+**Measured values.**
+
+| Measurement                                       | Value                                   |
+| ------------------------------------------------- | --------------------------------------- |
+| Dedup threshold                                   | **0.80** (was a 0.86 guess)             |
+| Precision / recall, all clusters                  | **1.0000 / 0.9500**                     |
+| Precision / recall, real clusters only            | **1.0000 / 1.0000**                     |
+| Cross-category similarity margin                  | **+0.04**                               |
+| Real items clustered                              | **5,208 → 5,007 events**                |
+| Merges by stage                                   | s1 = 48 · s2 = 23 · s3 = 130            |
+| Clustering wall time, 5,208 items incl. embedding | ~109s                                   |
+| Embedding model load (first, incl. download)      | ~50s · warm batch of 3: 16ms · 384 dims |
+
+**Three rules the real data forced, none of which the labelled set could have found.**
+
+1. **A repository is a container, not an identity.** Every `llama.cpp` release shares
+   `repo:ggml-org/llama.cpp`, so stage 2 merged **seven consecutive builds into one
+   event**, hiding six releases. Only model ids and version strings identify an event.
+2. **An artifact in a title is a claim; in a body it is a mention.** Five unrelated
+   arXiv papers merged because each abstract said "gpt-4o" — they all _evaluated_ the
+   model, none _was_ its release.
+3. **Conflicting identity artifacts block a stage-3 merge at any similarity.**
+   `b10400` and `b10405` embed at cosine **0.9649**.
+
+> Rules 1 and 2 were invisible to a 25-item labelled set and appeared within seconds
+> over 5,208 real items. This is precisely why the exit criterion is real data
+> reviewed by eye rather than a green measurement.
+
+**Other real bugs the tests caught.**
+
+- `unmergeEvidence` moved the row but never recomputed the source event's counts, so
+  the event kept claiming evidence it no longer had — and nothing would ever have
+  noticed, because those counts are only read, never re-derived.
+- The pipeline read a query's `LIMIT 5000` as a ceiling and **silently processed
+  5,000 of 5,208 items while reporting success**. Now cursor-paginated to drain.
+- `normalizeAlias` used NFKC (composing) rather than NFKD, so diacritic folding
+  silently did nothing.
+- An unparseable publisher timestamp propagated as `Invalid Date`, which compares
+  false against everything — such an item would never cluster and nothing would say why.
+
+**Known gaps carried forward.**
+
+1. The **labelled set is 25 items across 15 clusters**, not the ~200/~40 the phase
+   text asks for. Ten days of this registry produced very few genuine multi-outlet
+   clusters, because it is deliberately weighted toward primary sources that do not
+   duplicate each other. Padding it with guessed labels would have measured the
+   labeller. Composition and the exact labelling method are declared in
+   `fixtures/labelled/README.md`; **the labels were assigned by the agent, not the
+   operator**, and the real ones are worth ten minutes of review.
+2. `sqlite-vec` is **installed and verified working** (v0.1.9, KNN confirmed) but
+   **not used**: stage 3 compares against a window-bounded candidate set of a few
+   hundred vectors, which is a brute-force cosine loop taking microseconds. It earns
+   its place when the candidate set stops being small, not before.
+3. GitHub _activity_ items ("simonw pushed sqlite-utils", ×9) cluster together at
+   stage 3. Defensible as one "activity" event, but it is a judgment the operator
+   should confirm.
+4. The one missed merge in the labelled set is an outage reported by a status page and
+   by Hacker News in different words. Stage 3 scores it just under the threshold.
 
 ---
 
