@@ -19,13 +19,16 @@
     "test:coverage": "vitest run --coverage",
     "build": "tsc -b && pnpm --filter @signal-desk/web run build",
     "clean": "tsc -b --clean && rm -rf apps/web/.next coverage",
-    "check:env": "tsx apps/worker/src/cli/check-env.ts",
-    "check:env:ci": "tsx apps/worker/src/cli/check-env.ts --ci",
+    "check:env": "tsx --conditions=development apps/worker/src/cli/check-env.ts",
+    "check:env:ci": "tsx --conditions=development apps/worker/src/cli/check-env.ts --ci",
     "db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
-    "db:migrate": "tsx apps/worker/src/cli/migrate.ts",
+    "db:migrate": "tsx --conditions=development apps/worker/src/cli/migrate.ts",
     "worker": "node apps/worker/dist/index.js",
-    "worker:dev": "tsx apps/worker/src/index.ts",
-    "web:dev": "pnpm --filter @signal-desk/web run dev"
+    "worker:dev": "tsx --conditions=development apps/worker/src/index.ts",
+    "web:dev": "pnpm --filter @signal-desk/web run dev",
+    "db:seed": "tsx --conditions=development apps/worker/src/cli/seed.ts",
+    "sources:probe": "tsx --conditions=development apps/worker/src/cli/sources-probe.ts",
+    "sources:add": "tsx --conditions=development apps/worker/src/cli/sources-add.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

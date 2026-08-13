@@ -1,7 +1,58 @@
 # SOURCE-INTELLIGENCE.md
 
 **Source registry for the AI / Software / Technology intelligence system.**
-Last verified: 2026-08-12. Evidence tags per `ROADMAP.md` §Information Quality Model.
+Last verified: **2026-08-13** — every entry re-probed by `pnpm sources:probe`.
+Evidence tags per `ROADMAP.md` §Information Quality Model.
+
+---
+
+## Probe run — 2026-08-13 (Phase 2)
+
+**60 sources registered. 60 healthy. 1 warning. 0 failures.** The registry now lives in
+`packages/db/src/seed/sources.ts`; this document is its reasoning, and the two are kept in step by
+the seed-integrity tests.
+
+**What changed since the 2026-08-12 hand-probe:**
+
+| Change                                             | Detail                                                                                                                                                                                                                                                    |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **+4 status feeds**                                | Cloudflare, Vercel, AWS, and Supabase probed and added — the §1c to-do is closed. AWS's _legacy_ `status.aws.amazon.com/rss/all.rss` still serves (200, 36 items) even though the human-facing page moved to `health.aws.amazon.com`, which is HTML only. |
+| **+9 individuals**                                 | §4's "single largest remaining gap" is filled. See the revised §4.                                                                                                                                                                                        |
+| **Anthropic diff target chosen**                   | `www.anthropic.com/news`. `robots.txt` is `User-Agent: * / Allow: /` (checked 2026-08-13). Reasoning below.                                                                                                                                               |
+| **`docs.anthropic.com` has moved**                 | It now 301s to **`platform.claude.com/docs/`**. Anything in these documents referencing the old host is stale.                                                                                                                                            |
+| **Anthropic still has no feed**                    | Re-verified: `anthropic.com/news/rss.xml`, `anthropic.com/rss.xml`, and `anthropic.com/engineering/rss.xml` all 404. `docs.claude.com/rss.xml` answers **200 and serves the docs home page** — a fresh instance of the trap in the next row.              |
+| **The "200 with an HTML body" trap is still live** | `changelog.cursor.com/rss` still answers 200 with `text/html`. It is now a committed fixture (`fixtures/probe/two-hundred-with-html-body.html`) so the classifier is tested against the real thing.                                                       |
+| **Dead entries re-confirmed dead**                 | `mistral.ai/news/feed.xml` 404 · `deeplearning.ai/the-batch/feed/` 404 · `openai.com/index/rss.xml` 404.                                                                                                                                                  |
+
+**Measured item counts, where they differ from the 2026-08-12 figures.** Feeds move; these are
+recorded so a future drop is visible as a drop rather than mistaken for normal.
+
+| Source        | 08-12 | 08-13   |
+| ------------- | ----- | ------- |
+| OpenAI News   | 1125  | 1126    |
+| arXiv cs.AI   | 344   | **306** |
+| Vercel        | 1457  | 1463    |
+| OpenAI Status | 92    | 91      |
+
+**One warning, not a failure.** `hamel.dev/index.xml` is malformed: it serves a complete document,
+a stray `em>`, and then a **second concatenated document** from a `netlify.app` staging domain
+(line 5536). The lenient parser recovers 20 real items. The probe reports this as healthy with a
+warning rather than failing it — rejecting a working source over a publisher's build bug would be
+the wrong trade, and hiding the bug would be the other wrong trade. See `packages/adapters/src/probe.ts`.
+
+### Why `anthropic.com/news` and not the release-notes page
+
+Both were probed. Both are server-rendered, so both are diffable. The news page wins on three counts:
+
+- **Size:** 413KB against 1.6MB.
+- **Noise:** the release-notes page is **64% `<script>` bytes**. Raw-byte diffing there fires on
+  every deploy of the docs site. The news page exposes a clean `/news/<slug>` link set — a new slug
+  is unambiguously a new announcement.
+- **Latency:** announcements are what the KPI measures; release notes lag them.
+
+The release-notes page is registered too, at Priority 2, because it names model IDs — but it is
+diffed on **extracted text**, never on raw bytes. Both respect the ≥15-minute floor, enforced by a
+seed test rather than by convention.
 
 Every feed marked **VERIFIED** was fetched with `curl` on 2026-08-12 and returned HTTP 200 with
 well-formed XML and a non-zero item count. Feeds marked **DEAD** returned 404 or HTML. Nothing in
@@ -223,6 +274,43 @@ Selection criteria when the Phase-2 list is built (per §14 — _not_ follower c
 - Corrects themselves publicly when wrong
 - Operates in the operator's actual niche: applied AI engineering, not AI commentary
 
+### The list — built 2026-08-13, and what is unverified about it
+
+Route 1 (blogs) and route 2 (GitHub activity) are both in the registry. Route 3 (manual X Lists)
+remains correctly outside the software.
+
+| Source                   | Feed                                         | Probe 2026-08-13                                                 | Category             |
+| ------------------------ | -------------------------------------------- | ---------------------------------------------------------------- | -------------------- |
+| Simon Willison           | `https://simonwillison.net/atom/everything/` | **VERIFIED** 200, 30 items                                       | EXPERT_ANALYST       |
+| Sebastian Raschka        | `https://magazine.sebastianraschka.com/feed` | **VERIFIED** 200, 20 items                                       | EXPERT_ANALYST       |
+| Hamel Husain             | `https://hamel.dev/index.xml`                | **VERIFIED** 200, 20 items — _malformed, see the probe-run note_ | EXPERT_ANALYST       |
+| Eugene Yan               | `https://eugeneyan.com/rss/`                 | **VERIFIED** 200, 212 items (full archive)                       | EXPERT_ANALYST       |
+| Chip Huyen               | `https://huyenchip.com/feed.xml`             | **VERIFIED** 200, 10 items                                       | EXPERT_ANALYST       |
+| Lilian Weng              | `https://lilianweng.github.io/index.xml`     | **VERIFIED** 200, 53 items                                       | TECHNICAL_RESEARCHER |
+| Answer.AI                | `https://www.answer.ai/index.xml`            | **VERIFIED** 200, 20 items                                       | EXPERT_ANALYST       |
+| Simon Willison — GitHub  | `https://github.com/simonw.atom`             | **VERIFIED** 200, 25 items                                       | EARLY_SIGNAL         |
+| Andrej Karpathy — GitHub | `https://github.com/karpathy.atom`           | **VERIFIED** 200, 5 items                                        | EARLY_SIGNAL         |
+| Georgi Gerganov — GitHub | `https://github.com/ggerganov.atom`          | **VERIFIED** 200, 13 items                                       | EARLY_SIGNAL         |
+
+**Newly discovered dead, 2026-08-13:**
+
+- `karpathy.bearblog.dev/feed/` — **403** to non-browser clients. His GitHub activity atom is the
+  only free route, and it is registered instead.
+- `jxnl.co/feed.xml` — **404**.
+
+> **What is NOT verified about this list, stated plainly.** Three of the four §14 criteria are
+> observable from a handful of posts and were applied: publishes evidence rather than reaction,
+> operates in applied AI engineering rather than commentary, and — for the GitHub atoms — is a
+> maintainer whose commits precede their writing.
+>
+> The fourth, **"has been _first_ on a checkable claim at least twice in the last six months"**,
+> requires reading six months of archives against a timeline of what broke when. It was **not**
+> done. This list is therefore _probed and plausible_, not _vetted_.
+>
+> That distinction is the whole point of this document's evidence tagging, and it applies to the
+> document's own contents. Prune the list at the Phase 12 review, when there is measured precision
+> per source to prune on — not by feel before then.
+
 ---
 
 ## 5. IGNORE — explicitly out of scope
@@ -280,16 +368,24 @@ bandwidth and free CPU, and it is the difference between polite polling and gett
 
 ---
 
-## 7. What must be re-verified before Phase 2 closes
+## 7. What must be re-verified before Phase 2 closes — **resolved 2026-08-13**
 
-This file is a snapshot. The following are known-uncertain and are Phase-2 acceptance items:
+| #   | Item                                                                                       | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Every **INFERRED** feed added beyond this list must be probed and get a `verified_at` date | ✅ **Done.** All 60 registered sources probed; every one carries a `verified_at`. Nothing in the registry is unprobed.                                                                                                                                                                                                                                                                                                                                 |
+| 2   | The Anthropic diff target URL must be chosen and its `robots.txt` checked                  | ✅ **Done.** `www.anthropic.com/news`, `robots.txt` = `Allow: /`. Reasoning in the probe-run note at the top.                                                                                                                                                                                                                                                                                                                                          |
+| 3   | Cloudflare / Vercel / AWS / Supabase status feeds probed and added                         | ✅ **Done.** All four VERIFIED and registered.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 4   | `hnrss.org` has no SLA — add a fallback                                                    | ⚠️ **Partly.** Both `hnrss.org/newest?points=100` and the official `news.ycombinator.com/rss` are registered, so the official feed is present and will keep producing if the third party fails. **Client-side score filtering is not built** — that is Phase 3/5 work, and until it exists the fallback covers availability but not the ≥100-point filter. `hn-100points` is seeded at reliability 0.4 to reflect that.                                |
+| 5   | Reddit's Data API terms must be read directly rather than via reporting                    | ❌ **Not done, and deliberately deferred.** Reading and interpreting a platform's legal terms is a judgment call this phase should not fake. What matters is that the design conclusion is unaffected either way: the system uses only the public `.rss` endpoint (VERIFIED 200, 25 items), stores Reddit content as short-lived signal, and never mirrors user text into durable storage. Revisit only if a phase genuinely needs comment-level data. |
+| 6   | The individuals list (§4) does not exist                                                   | ✅ **Done**, with an explicit caveat about which selection criterion went unverified. See §4.                                                                                                                                                                                                                                                                                                                                                          |
 
-1. Every **INFERRED** feed added beyond this list must be probed and get a `verified_at` date.
-2. The Anthropic docs/release-notes diff target URL must be chosen and its `robots.txt` checked.
-3. Cloudflare / Vercel / AWS / Supabase status feeds must be probed and added.
-4. `hnrss.org` is third-party infrastructure with no SLA — add a fallback to the official
-   `news.ycombinator.com/rss` plus client-side filtering if it becomes unreliable.
-5. Reddit's current published Data API terms must be read directly rather than via reporting, and
-   the conclusion in §2 confirmed or revised.
-6. The individuals list (§4) does not exist yet. It is Phase 2 work, and it is the single largest
-   remaining gap in this registry.
+### New Phase-2 findings that belong on this list
+
+7. **`docs.anthropic.com` now redirects to `platform.claude.com/docs/`.** Any URL in these
+   documents or in code using the old host is stale.
+8. **`hamel.dev/index.xml` is malformed at source** (two concatenated documents). It works, it is
+   registered, and the probe warns about it on every run. If the publisher fixes their build, the
+   warning disappears on its own; if the feed degrades further, the warning becomes a failure.
+9. **`eugeneyan.com/rss/` serves the full 212-item archive.** The first ingest will be large and
+   almost entirely historical. Expected, not a fault — but worth knowing before Phase 3's first run
+   makes it look like a burst of activity.

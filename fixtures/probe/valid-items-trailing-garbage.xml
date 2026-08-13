@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>A feed whose build concatenated two documents</title>
+    <link>https://example.invalid/</link>
+    <description>Shape recorded from hamel.dev/index.xml on 2026-08-13.</description>
+    <item>
+      <title>First real post</title>
+      <link>https://example.invalid/one</link>
+      <pubDate>Mon, 11 Aug 2026 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Second real post</title>
+      <link>https://example.invalid/two</link>
+      <pubDate>Sun, 10 Aug 2026 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+em>
+<item>
+  <title>Leaked from a staging build</title>
+  <link>https://staging-preview.invalid/three</link>
+</item>

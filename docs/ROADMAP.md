@@ -257,7 +257,12 @@ Docker image builds in ~2min.
 
 ---
 
-## ☐ Phase 2 — Source registry and watchlist
+## ☑ Phase 2 — Source registry and watchlist
+
+> **DONE 2026-08-13.** Tag `phase-2-complete`. All six acceptance criteria met; exit criterion
+> (`SOURCE-INTELLIGENCE.md` updated with every newly verified and newly dead feed) met.
+> **60 sources registered, 60 probed healthy, 1 warning, 0 failures.** 294 tests.
+> CI-on-GitHub remains `PENDING-REMOTE` — see Phase 1.
 
 **OBJECTIVE** Every source from `SOURCE-INTELLIGENCE.md` in the database, probed, with a working
 health view.
@@ -297,6 +302,57 @@ category valid). Entity alias resolution. Probe result parsing against fixtures 
 newly discovered dead one.
 
 **ROLLBACK** Registry is data. Revert the seed.
+
+### Phase 2 outcome — 2026-08-13
+
+| Acceptance criterion                                                                        | Result                                                                                                                             |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| ≥30 sources seeded, every one probed and VERIFIED with a date                               | ✅ **60 sources, 60 healthy.** No unprobed row exists in the registry                                                              |
+| `sources:probe` produces a readable table and exits non-zero if any Priority-1 source fails | ✅ Table + failure detail + warning detail; exit code unit-tested across every outcome                                             |
+| Anthropic's `html_diff` target chosen, `robots.txt` checked and recorded                    | ✅ `anthropic.com/news`; `robots.txt` = `Allow: /`                                                                                 |
+| Cloudflare / Vercel / AWS / Supabase status feeds probed and added                          | ✅ all four VERIFIED                                                                                                               |
+| Entity registry resolves the alias set for the top 15 entities                              | ✅ 19 entities, 83 aliases, 32 resolution cases asserted                                                                           |
+| The individuals list gap is filled or explicitly deferred in writing                        | ✅ **filled** — 9 new sources, with the one selection criterion that went unverified stated plainly in `SOURCE-INTELLIGENCE.md` §4 |
+
+**Measured values recorded** (replacing the document's 2026-08-12 hand-probe figures): arXiv cs.AI
+**344 → 306** items; OpenAI News 1125 → 1126; Vercel 1457 → 1463; OpenAI Status 92 → 91. Whole-registry
+probe wall time ≈ 12s at concurrency 6.
+
+**Three things the live probe found that no amount of code review would have.**
+
+1. **`XMLValidator` as a gate is wrong in both directions.** Validating before parsing rejected
+   `hamel.dev/index.xml` outright — a feed that is genuinely malformed (two concatenated documents,
+   line 5536) and genuinely carries 20 real items. Skipping validation entirely mislabels truncated
+   XML as `empty_feed`, sending the operator to the publisher when the fault is the transfer. The
+   design is now: **items decide the outcome, validity decides whether there is a warning.** A
+   warning never affects the exit code.
+2. **Alias normalisation must decompose, not compose.** `normalizeAlias` used NFKC, which leaves
+   "á" as one code point that no combining-mark class matches — so diacritics survived and the fold
+   silently did nothing. NFKD fixed it. A unit test caught this; nothing else would have.
+3. **The unique index on `entity_aliases.normalized` earned its place on first use**, rejecting the
+   seed because "Next.js"/"NextJS", "Hugging Face"/"HuggingFace", and "x-algorithm"/"X algorithm"
+   fold to one key each. Within one entity that is correct behaviour, not a collision, so seeding
+   now folds duplicates and raises `CrossEntityAliasError` only when two _different_ entities claim
+   one alias.
+
+**Delivered beyond the literal list.** `safeFetch` (timeout, response size cap enforced against
+bytes actually read rather than a trusted `content-length`, manual redirect following capped at 3,
+scheme allowlist). The roadmap places these in Phase 3, but the probe needed them, and a fetch
+without them is how one misbehaving feed hangs the worker. The T-6 SSRF controls proper — host
+allowlist, private-range blocking, per-hop re-checking — remain Phase 3, where the system first
+follows URLs found _inside_ content.
+
+**Known gaps carried forward.**
+
+1. `hn-100points` depends on `hnrss.org`, which has no SLA. The official HN feed is registered
+   alongside it, but **client-side score filtering is not built** — so the fallback covers
+   availability, not the ≥100-point filter. Phase 3/5 work; seeded at reliability 0.4 meanwhile.
+2. **Reddit's Data API terms have not been read directly** (`SOURCE-INTELLIGENCE.md` §7 item 5).
+   Deferred deliberately: the design conclusion — public `.rss` only, no durable storage of user
+   text — is unaffected either way.
+3. The individuals list is _probed_, not _vetted_: the "first on a checkable claim twice in six
+   months" criterion needs an archive read. Prune at Phase 12 against measured precision.
+4. `hamel.dev` warns on every probe run until its publisher fixes their build.
 
 ---
 

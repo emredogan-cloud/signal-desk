@@ -1,6 +1,9 @@
 import {
   openDatabase,
   runMigrations,
+  seedAll,
+  countRows,
+  staleSources,
   MIGRATIONS_FOLDER,
   type DatabaseHandle,
 } from '@signal-desk/db';
@@ -44,7 +47,45 @@ export async function runWorker(options: RunOptions = {}): Promise<RunResult> {
   const database = openDatabase({ url: databaseUrl });
 
   runMigrations(database, MIGRATIONS_FOLDER);
-  logger.info({ database_url: databaseUrl }, 'database ready');
+
+  // The registry is defined in code, so the database is brought into step with it on
+  // every start. Idempotent, and it never overwrites learned state — etags,
+  // freshness timestamps, or an `active` flag an operator turned off deliberately.
+  const seeded = seedAll(database.db);
+  const counts = countRows(database.db);
+  logger.info(
+    {
+      database_url: databaseUrl,
+      sources: counts.sources,
+      entities: counts.entities,
+      aliases: counts.aliases,
+      sources_inserted: seeded.sourcesInserted,
+    },
+    'database ready',
+  );
+
+  // THREAT-MODEL.md §T-9 — the startup self-test. A source that has gone quiet is
+  // reported at start rather than discovered weeks later, because the failure mode
+  // being defended against is the operator believing he is covered when he is not.
+  const stale = staleSources(database.db);
+  for (const { source, silentForSec, thresholdSec } of stale) {
+    logger.warn(
+      {
+        source_id: source.id,
+        priority: source.priority,
+        silent_for_hours: Math.round(silentForSec / 3600),
+        threshold_hours: Math.round(thresholdSec / 3600),
+        last_success_at: source.lastSuccessAt?.toISOString() ?? null,
+      },
+      `STALE SOURCE: ${source.id} has produced nothing for longer than its tier allows`,
+    );
+  }
+  if (stale.length > 0) {
+    logger.warn(
+      { stale_count: stale.length, total_sources: counts.sources },
+      `${String(stale.length)} of ${String(counts.sources)} sources are stale — run \`pnpm sources:probe\``,
+    );
+  }
 
   let closed = false;
   const shutdown = async (): Promise<void> => {

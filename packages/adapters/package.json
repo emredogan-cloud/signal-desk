@@ -8,10 +8,12 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
+      "development": "./src/index.ts",
       "default": "./dist/index.js"
     }
   },
   "dependencies": {
-    "@signal-desk/shared": "workspace:*"
+    "@signal-desk/shared": "workspace:*",
+    "fast-xml-parser": "^5.10.1"
   }
 }

@@ -16,21 +16,25 @@ and trustworthy, because the asset being built is trust.
 
 ## What actually exists right now
 
-**Phase 1 of 15 — foundation only.** This section is the honest inventory, and it is updated as
-each phase lands rather than describing the finished plan.
+**Phase 2 of 15.** This section is the honest inventory, and it is updated as each phase lands
+rather than describing the finished plan.
 
-| Built                                                                   | Not built                                    |
-| ----------------------------------------------------------------------- | -------------------------------------------- |
-| pnpm workspace, TypeScript strict, ESLint + Prettier                    | Source registry (Phase 2)                    |
-| Zod-validated configuration with MOCK/LIVE modes                        | Ingestion adapters (Phase 3)                 |
-| Structured logging with secret redaction                                | Deduplication and canonical events (Phase 4) |
-| SQLite + Drizzle, migrations, `sources` table                           | Scoring and the rule gate (Phase 5)          |
-| Vitest with coverage; CI with secret scanning                           | AI analysis (Phase 6)                        |
-| Multi-stage Dockerfile (unused; keeps deployment cheap to decide later) | Content strategy (Phase 7)                   |
-| A placeholder web page carrying the MOCK badge                          | The dashboard (Phase 10)                     |
+| Built                                                                   | Not built                                      |
+| ----------------------------------------------------------------------- | ---------------------------------------------- |
+| pnpm workspace, TypeScript strict, ESLint + Prettier                    | Ingestion adapters and the scheduler (Phase 3) |
+| Zod-validated configuration with MOCK/LIVE modes                        | Deduplication and canonical events (Phase 4)   |
+| Structured logging with secret redaction                                | Scoring and the rule gate (Phase 5)            |
+| SQLite + Drizzle, migrations                                            | AI analysis (Phase 6)                          |
+| **60-source registry, all probed healthy**                              | Content strategy (Phase 7)                     |
+| **19 entities / 83 aliases, with a resolver**                           | Trend intelligence (Phase 9)                   |
+| **`sources:probe` health tooling**                                      | The dashboard (Phase 10)                       |
+| Vitest with coverage; CI with secret scanning                           | Alerts (Phase 11)                              |
+| Multi-stage Dockerfile (unused; keeps deployment cheap to decide later) | Analytics and the feedback loop (Phase 12)     |
+| A placeholder web page carrying the MOCK badge                          |                                                |
 
-**There is no intelligence in this repository yet.** No feed is fetched, no event is detected, no
-analysis is produced. The plan for all of it is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+**Nothing is ingested yet.** The registry knows about 60 sources and can tell you whether each one
+is alive, but no feed is fetched on a schedule, no event is detected, and no analysis is produced.
+The plan for all of it is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
@@ -47,11 +51,18 @@ No credentials are needed. Phases 1–5 require none at all; everything runs aga
 `MOCK` mode, and CI runs with no secrets configured on purpose.
 
 ```bash
-pnpm check:env     # what is configured, what mode that implies, what is degraded
-pnpm db:migrate    # apply migrations (the worker also does this on startup)
-pnpm worker:dev    # start the worker (Phase 1: starts, migrates, reports, exits)
-pnpm web:dev       # dashboard placeholder on http://127.0.0.1:3000
+pnpm check:env       # what is configured, what mode that implies, what is degraded
+pnpm db:migrate      # apply migrations (the worker also does this on startup)
+pnpm db:seed         # load the source and entity registries — idempotent
+pnpm sources:probe   # fetch every source, report health, exit non-zero on a P1 failure
+pnpm sources:add     # add a source; probes it first and refuses a URL that is not a feed
+pnpm worker:dev      # start the worker (starts, migrates, seeds, self-tests, exits)
+pnpm web:dev         # dashboard placeholder on http://127.0.0.1:3000
 ```
+
+`sources:probe` is a **live network command** and is deliberately exempt from `DATA_MODE=MOCK`: its
+whole job is to check whether real URLs still work, and a mocked probe would report the registry as
+healthy without touching it.
 
 To configure anything, copy the template — it contains names and descriptions only, never values:
 

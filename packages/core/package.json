@@ -8,10 +8,14 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
+      "development": "./src/index.ts",
       "default": "./dist/index.js"
     }
   },
   "dependencies": {
     "@signal-desk/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@signal-desk/db": "workspace:*"
   }
 }

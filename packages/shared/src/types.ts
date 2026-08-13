@@ -50,6 +50,33 @@ export type SourcePlatform = (typeof SOURCE_PLATFORMS)[number];
 export const SOURCE_PRIORITIES = [1, 2, 3, 4] as const;
 export type SourcePriority = (typeof SOURCE_PRIORITIES)[number];
 
+/**
+ * Seed reliability by source category, 0.0–1.0.
+ *
+ * **Every one of these is an unvalidated starting guess.** They encode one ordering
+ * claim — that a vendor announcing its own launch is more reliable about that launch
+ * than a journalist reporting it, who is in turn more reliable than a comment thread
+ * — and nothing finer. Phase 12 replaces them with measured precision per source.
+ * Until then the system does not pretend the numbers mean more than they do.
+ */
+export const SOURCE_CATEGORY_RELIABILITY: Record<SourceCategory, number> = {
+  OFFICIAL_SOURCE: 0.95,
+  TECHNICAL_RESEARCHER: 0.8,
+  EXPERT_ANALYST: 0.75,
+  EARLY_SIGNAL: 0.65,
+  JOURNALIST: 0.6,
+  COMMUNITY_SIGNAL: 0.45,
+  AMPLIFIER: 0.3,
+};
+
+/**
+ * What an entity is. Models and products are stored as *aliases* of the
+ * organisation, not as entities — "Anthropic shipped Opus 5" and "claude-opus-5 is
+ * out" describe one event, and resolving them to one entity is the point.
+ */
+export const ENTITY_KINDS = ['org', 'project', 'person'] as const;
+export type EntityKind = (typeof ENTITY_KINDS)[number];
+
 /** ROADMAP.md §6 — events and trends are deliberately never merged. */
 export const EVENT_CATEGORIES = [
   'ai',
