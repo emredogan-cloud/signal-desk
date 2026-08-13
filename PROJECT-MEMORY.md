@@ -328,6 +328,8 @@ Full detail in `docs/ENV-HANDBOOK.md`. Run `pnpm check:env` for live state.
 
 ## J. Test state
 
+**708 tests, 21 files, all green.** `pnpm verify` = typecheck + lint + format-check + test + audit.
+
 - **428 tests, 15 files, all passing.** `pnpm verify` green.
 - `pnpm verify` = `format:check → lint → typecheck → test → build`. Identical to CI.
 - Zero flaky tests. Nothing is skipped. No test requires a network or a credential.
@@ -369,95 +371,74 @@ Full detail in `docs/ENV-HANDBOOK.md`. Run `pnpm check:env` for live state.
 
 ---
 
-## M. NEXT PHASE: Phase 4 — Normalisation, clustering, deduplication
+## M. Phases 5 and 6 — the record
 
-### Read first
+### Phase 5 — Scoring and the rule gate (CODE-COMPLETE, tag `phase-5-complete`)
 
-1. `docs/ROADMAP.md` → Phase 4 (objective, tests, acceptance, exit)
-2. `docs/ARCHITECTURE.md` §5 — the canonical event model and **three-stage dedup**
-3. `docs/THREAT-MODEL.md` §T-1 mitigation 3 — the **sanitisation contract**
-4. `packages/db/src/schema.ts` — `raw_items` is your input
-5. `packages/core/src/entities/registry.ts` — entity extraction already exists
+`packages/core/src/score/` — `weights.ts` (every constant, each labelled an
+unvalidated guess), `importance.ts`, `relevance.ts`, `confidence.ts`, `gate.ts`.
+`packages/db` gained `event_scores` (append-only). `pnpm score -- --top` runs it.
 
-### Objective
+**MEASURED:** gate kill rate **98.7% overall / 91.5% excluding staleness** over 5,007
+real events, against a ≥85% target. 65 events pass the gate.
 
-Many source items become **one canonical event with attached evidence**. Without it
-the dashboard is a feed reader showing the same launch nine times.
+**The first measurement failed at 17%.** Recency was a score _component_, so
+years-old Vercel changelog entries lost points and still cleared the floor. Staleness
+is a **kill rule**, not a penalty — `ROADMAP.md` §1 optimises for EARLY. 17% → 98.7%.
 
-### What already exists that Phase 4 must reuse
+**Two kill rates are reported, not one.** The first ingest backfilled whole archives,
+so an overall rate is dominated by `too_old`. Quoting only 98.7% would be true and
+misleading.
 
-- **`raw_items`** — ~5,200 real rows after one live pass. Real input, immediately.
-- **`EntityRegistry.extract()`** — longest-match entity extraction, tested.
-- **`normalizeAlias` / `candidateGrams`** in `shared` — reuse, do not reimplement.
-- **`contentHash()`** in `adapters/feed-parse.ts` — already the stage-1 key.
-  _It lives in `adapters` and clustering lives in `core`; move it to `shared` rather
-  than making `core` depend on `adapters`._
+**Confidence is computed then CAPPED.** A weight can be outvoted — six comment
+threads carry more weighted confidence than one official post, which is how a rumour
+launders itself into fact (§T-2). A cap cannot. `applyCaps` is monotonically
+non-increasing, proved by exhaustive property test over the whole input space.
 
-### Files likely to change
+### Phase 6 — AI analysis engine (CODE-COMPLETE, tag `phase-6-complete`)
 
-```
-packages/core/src/normalize/     NEW — sanitisation, CanonicalEvent construction
-packages/core/src/cluster/       NEW — three-stage dedup
-packages/db/src/schema.ts        + events, evidence, merge_audit
-packages/db/migrations/          0003_phase4_events.sql
-fixtures/labelled/               NEW — ~200 items / ~40 events, hand-labelled
-apps/worker/src/pipeline.ts      NEW — raw_items → events
-```
+`packages/ai/` — `envelope.ts` (random per-request delimiter, §T-1 mit 4),
+`schema.ts` (`additionalProperties:false` everywhere, §T-1 mit 2), `budget.ts`
+(NORMAL→FRUGAL→TRIAGE→SUSPENDED), `prompts.ts` (versioned), `client.ts` (**no tools,
+ever** — §T-1 mit 1, asserted against the source), `validate.ts`, `engine.ts`,
+`mock.ts`. `packages/core/src/security/` holds the 39-document injection corpus.
+`packages/db` gained `analyses`. `pnpm analyze` runs it.
 
-### Interfaces to respect
+**The corpus found 22 real detector gaps.** Phase 4's detector covered overrides and
+hidden text and missed every invisible-character payload, every score-manipulation
+attempt, every fake-authority claim, every exfiltration probe, both schema attacks.
 
-- **`core` performs no I/O.** Clustering takes candidate events _passed in_ and
-  returns decisions. The database round-trip belongs in `apps/worker` or `db`.
-- **`raw_items` is append-only.** `events` is derived and re-computable. If a design
-  needs to mutate `raw_items`, the design is wrong.
-- **Sanitisation runs before anything stores or reads content** — but _after_
-  `raw_items`, which keeps the unmodified bytes.
+**Obfuscation defeated it completely** — `I<ZWSP>g<ZWSP>n…` matches no keyword, so
+the payload most obviously designed to evade detection was the one that did. Fix:
+match raw AND de-obfuscated, and treat invisible characters as a signal themselves.
 
-### Tests to add
+**The four benign controls are the point.** A detector that flags everything passes
+all 35 hostile cases. The hardest control is a legitimate article _about_ prompt
+injection — what this operator monitors most. It must not be flagged.
 
-- The **labelled fixture set** — the phase's blocking acceptance criterion. Measured
-  precision and recall, reported by the suite.
-- Adversarial: two different models from the same vendor on the same day (must **not**
-  merge); one launch from six outlets (must merge); an update arriving 3 days later.
-- Sanitiser cases from `THREAT-MODEL.md` §5 test 2: hidden text, HTML comments,
-  zero-width and bidi characters, oversized documents.
-- Determinism: same input → same clusters.
+**Haiku's 4,096-token cache floor is real and silent.** Below it:
+`cache_creation_input_tokens: 0`, no error, full price forever. The first triage
+prompt measured 1,626 tokens and a test caught it. At ~100 calls/day, crossing the
+floor with useful content costs a third of a terse prompt.
 
-### Known traps
+**Zero events reached deep analysis, and the run says so.** Top combined score is 66;
+`AI_ANALYSIS_THRESHOLD` is 70. Neither number was changed to make output look better.
 
-1. **`sqlite-vec` is not installed yet.** It is a loadable extension; confirm it loads
-   under `better-sqlite3` before designing around it.
-2. **Local ONNX embeddings need a model download.** `bge-small-en-v1.5` via
-   `@huggingface/transformers`. Cache it under a gitignored path — `.models/` is
-   already ignored. **CI must not download it**; MOCK/test paths need a deterministic
-   embedding stub.
-3. **The 0.86 similarity threshold is a guess.** The acceptance criterion is to
-   _measure_ precision/recall and write the measured number into `ARCHITECTURE.md` §5,
-   replacing the guess. Do not ship the guess and mark the phase done.
-4. **Primary-source selection is by source category, not arrival order.** A
-   journalist's report _about_ a launch is evidence; the launch post is the record.
-5. **Merges must be reversible.** Every merge writes an audit row, and unmerge must
-   restore prior state exactly. A silent wrong merge hides an event — worse than a
-   visible duplicate.
-6. `eugeneyan` contributed 212 archival items in one go. Do not read a burst of
-   old-dated items as a clustering bug.
+---
 
-### Environment
+## M2. NEXT PHASE: Phase 7 — X content strategy engine
 
-None. Phase 4 needs no credentials — embeddings are local.
+Read `docs/ROADMAP.md` Phase 7 in full before starting. In brief: `packages/core/
+strategy` produces five options per event (quote / reply / original / educational /
+wait), the WHY NOW / WHY ME / WHAT CAN I ADD / EXPECTED OUTCOME panel, and the
+DON'T POST path with seven explicit reasons.
 
-### First command
-
-```bash
-pnpm install && pnpm verify        # confirm the inherited state is green
-DATA_MODE=LIVE pnpm ingest:once -- --force   # ~5,200 real rows to cluster
-```
-
-### Expected end state
-
-`events` and `evidence` tables populated from `raw_items`; measured precision ≥0.95
-and recall ≥0.85 on the labelled set, **with the measured numbers written into
-`ARCHITECTURE.md` §5**; unmerge restores exactly; replay is deterministic.
+The acceptance criterion that shapes the design: **≥30% of scored events must receive
+DON'T POST or WAIT** — "a system that recommends action on everything has no
+judgment." Forcing rules (rumour → WAIT-VERIFY, accusation → WAIT-VERIFY + manual
+flag) must be unbypassable by any input, exactly like the Phase 5 confidence caps and
+the Phase 6 output caps. That pattern — compute, then cap in code, never in a prompt —
+is now the house style for anything a hostile document could influence.
 
 ---
 
