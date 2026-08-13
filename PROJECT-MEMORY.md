@@ -328,7 +328,7 @@ Full detail in `docs/ENV-HANDBOOK.md`. Run `pnpm check:env` for live state.
 
 ## J. Test state
 
-**708 tests, 21 files, all green.** `pnpm verify` = typecheck + lint + format-check + test + audit.
+**879 tests, 25 files, all green.** `pnpm verify` = typecheck + lint + format-check + test + audit.
 
 - **428 tests, 15 files, all passing.** `pnpm verify` green.
 - `pnpm verify` = `format:check → lint → typecheck → test → build`. Identical to CI.
@@ -426,19 +426,70 @@ floor with useful content costs a third of a terse prompt.
 
 ---
 
-## M2. NEXT PHASE: Phase 7 — X content strategy engine
+## M2. Phases 7, 8 and 9 — the record
 
-Read `docs/ROADMAP.md` Phase 7 in full before starting. In brief: `packages/core/
-strategy` produces five options per event (quote / reply / original / educational /
-wait), the WHY NOW / WHY ME / WHAT CAN I ADD / EXPECTED OUTCOME panel, and the
-DON'T POST path with seven explicit reasons.
+### Phase 7 — X content strategy engine (tag `phase-7-complete`)
 
-The acceptance criterion that shapes the design: **≥30% of scored events must receive
-DON'T POST or WAIT** — "a system that recommends action on everything has no
-judgment." Forcing rules (rumour → WAIT-VERIFY, accusation → WAIT-VERIFY + manual
-flag) must be unbypassable by any input, exactly like the Phase 5 confidence caps and
-the Phase 6 output caps. That pattern — compute, then cap in code, never in a prompt —
-is now the house style for anything a hostile document could influence.
+`packages/core/src/strategy/` — `angles.ts` (8 expert angles), `forcing.ts`,
+`options.ts` (five options, the panel, DON'T POST). `pnpm strategy -- --top`.
+
+**MEASURED restraint: 50.8%** over the 65 gate survivors, against ≥30%.
+
+**The first measurement failed at 20.6%, from two real bugs.** The CLI hardcoded
+`expertSourceCount: 0`, silently disabling three of seven DON'T POST reasons; and it
+ran over all 5,000 scored events, of which the gate had already killed 4,942. Asking
+"should he post about this?" of an event the pipeline rejected is meaningless.
+
+**Forcing rules run FIRST.** That ordering is what makes them unbypassable — there is
+nothing for a positive recommendation to argue with. An event scoring 100 on every
+axis is still forced to WAIT if its title reads as a rumour.
+
+### Phase 8 — Educational content engine (tag `phase-8-complete`)
+
+`packages/core/src/strategy/educational.ts`, `packages/ai/src/batch.ts`.
+
+**Limitations are a code path, not a prompt instruction.** An opportunity that cannot
+state its failure modes is not emitted. A field that is _usually_ filled is a field
+that will one day be empty.
+
+**The experiment generator never produces a `result`.** A test asserts the key is
+absent, not merely empty. A generated result is a fabricated measurement.
+
+**Batch is a deadline decision, not a cost decision.** `collectBatch` returns a Map
+keyed by `custom_id` so correct usage is the only convenient usage — position-based
+matching silently mis-attributes results, which is worse than a crash.
+
+### Phase 9 — Trend intelligence (tag `phase-9-complete`)
+
+`packages/core/src/trends/`, `trends` + `trend_observations` tables, `pnpm trend`.
+
+**A test forced a modelling correction.** Saturation was gated on overall growth, but
+a format that ramped then plateaued still shows strong growth because the early half
+_contains the ramp_ — `40, 70, 72, 68, 65` reported +24% and was placed MAINSTREAM.
+Growth ("how far has it come") and momentum ("is it still climbing") are different
+questions; saturation turns on the second.
+
+**Saturation scores breadth, not volume.** Loud in one community ≠ saturated.
+
+**The machine never writes a human field.** `mechanism` etc. are `string | undefined`
+rather than optional, so "not filled in" is representable, and `missing` names the
+gaps. The automated signal is specified and deliberately **not wired** — the manual
+path is complete and the automated path is a stub with no fabricated data behind it.
+
+---
+
+## M3. NEXT PHASE: Phase 10 — Dashboard command centre
+
+Read `docs/ROADMAP.md` Phase 10 in full first.
+
+**The house style, now established across five phases and worth stating once:**
+compute, then cap in code — never in a prompt, never as a weight that volume can
+outvote. Phase 5 caps confidence, Phase 6 caps the analysis output, Phase 7 forces the
+recommendation. Anything a hostile document could influence gets this treatment.
+
+**The second recurring lesson:** every measured acceptance criterion in Phases 5, 7 and
+9 failed on its first run, and every failure was a real defect rather than a badly-set
+threshold. Measure against real data before believing anything.
 
 ---
 
