@@ -37,7 +37,8 @@
     "score": "tsx --conditions=development apps/worker/src/cli/score.ts",
     "analyze": "tsx --conditions=development apps/worker/src/cli/analyze.ts",
     "strategy": "tsx --conditions=development apps/worker/src/cli/strategy.ts",
-    "trend": "tsx --conditions=development apps/worker/src/cli/trend.ts"
+    "trend": "tsx --conditions=development apps/worker/src/cli/trend.ts",
+    "alerts": "tsx --conditions=development apps/worker/src/cli/alerts.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

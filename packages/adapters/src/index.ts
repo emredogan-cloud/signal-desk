@@ -31,3 +31,4 @@ export * from './mock.js';
 export * from './embeddings.js';
 export * from './probe.js';
 export * from './registry.js';
+export * from './ntfy.js';

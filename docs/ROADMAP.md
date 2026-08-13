@@ -1252,7 +1252,15 @@ claim is narrower: none of the shipped script is ours, and none of it is inline.
 
 ---
 
-## ☐ Phase 11 — Alerts
+## ◐ Phase 11 — Alerts
+
+> **CODE-COMPLETE 2026-08-13.** Tag `phase-11-complete`. 956 tests, CI green.
+>
+> **Measured on real data: 1 alert from 65 gate survivors** — an accusation
+> ("Stolen LLM Reasoning…") escalated for human review by the Phase 7 forcing rules.
+>
+> **`PENDING-ELAPSED`:** the ≤2/day average over two weeks.
+> **`PENDING-OPERATOR`:** whether each alert was worth interrupting him.
 
 **OBJECTIVE** Tell the operator about URGENT things without training him to ignore notifications.
 
@@ -1274,6 +1282,60 @@ quiet hours; **source-freshness alerting (T-9)** — Priority-1 silent 6h, Prior
 **EXIT CRITERIA** Above.
 
 **ROLLBACK** Set `ALERT_MIN_PRIORITY` beyond any tier.
+
+### Phase 11 outcome — 2026-08-13
+
+| Acceptance criterion                                                    | Result                                                                                         |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| ≤2 alerts per day on average over two weeks                             | ◐ **1 alert from 65 gate survivors** on real data; the two-week average is **PENDING-ELAPSED** |
+| Every alert fired is one the operator agrees was worth interrupting him | ⏳ **PENDING-OPERATOR**                                                                        |
+| A disabled Priority-1 source produces a freshness alert within 6 hours  | ✅ threshold is 6h and tested; the live disable is **PENDING-OPERATOR**                        |
+
+**Every mechanism here exists to suppress, not to notify.** Tiering, deduplication,
+quiet hours, and the daily cap are four independent reasons _not_ to fire. The default
+`ALERT_MIN_PRIORITY` is `urgent`, so the system ships silent and the operator opts into
+more — the opposite of the usual default, and the only one consistent with "an alert
+system the operator mutes has negative value".
+
+**POST_SOON deliberately does not alert.** It has no deadline, so interrupting for it
+is precisely how an operator learns to ignore interruptions. Only two things
+interrupt: something to act on _now_, and something escalated for human review.
+
+**The daily cap is 4, not 2, on purpose.** The criterion is an average over two weeks.
+A hard cap at the average would clip every genuinely busy day to look like an average
+one — manufacturing the number instead of measuring it. The cap exists to stop a
+runaway; if the average lands above 2, the tiering is wrong and that is what to fix.
+Suppressed alerts are returned and counted rather than dropped, because hitting the
+cap is information about the tiering, and hiding it would let the system look calm
+while failing.
+
+**A LIMIT read as a truncation — the same bug class as Phase 5.** `latestScores`
+applied its LIMIT _before_ filtering to gate survivors and filtered the rest in
+JavaScript, so asking for 100 survivors returned however many fell inside the top 100
+by score. The measured restraint rate swung between **50.8% and 21.1% depending only
+on the `--limit` flag**, and the alerts CLI missed the manual-flagged event entirely.
+The filter now runs in SQL.
+
+**One derivation, three callers.** The recommendation logic was independently
+reimplemented in the `strategy` CLI, the dashboard, and the `alerts` CLI — and the
+third had already drifted, hard-coding `POST_SOON` so the event-alert path could never
+fire. `strategyFromScore` is now the single derivation. Three copies of a judgement
+become three different answers, and the one that drifts is the one nobody is watching.
+
+**The ntfy topic is treated as a credential.** It is never logged, and a delivery
+failure surfaces only the error's _class_ — the message could contain the URL, and the
+URL contains the topic. Failures always fall back to the console and always say they
+fell back: an unreachable server that silently swallowed an urgent alert would leave
+the operator believing he was covered.
+
+**Known gaps carried forward.**
+
+1. **Dedup state is per-run.** Two runs an hour apart will both alert on the same
+   fact. Persisting it is a Phase 14 concern and is stated in the code rather than
+   left for a reader to assume otherwise.
+2. Quiet hours (23:00–07:00) and the daily cap are guesses.
+3. Only `ntfy.sh` is supported; a self-hosted server needs a config key that does not
+   exist yet.
 
 ---
 

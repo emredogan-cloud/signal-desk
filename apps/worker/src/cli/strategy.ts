@@ -7,12 +7,7 @@ import {
   envelopeItemsFor,
   loadEntityRegistryRows,
 } from '@signal-desk/db';
-import {
-  buildStrategy,
-  summariseStrategies,
-  TESTABLE_ENTITIES,
-  type Strategy,
-} from '@signal-desk/core';
+import { strategyFromScore, summariseStrategies, type Strategy } from '@signal-desk/core';
 import { ConfigError } from '@signal-desk/shared';
 import { bootstrap } from '../bootstrap.js';
 import { renderTable } from '../table.js';
@@ -65,46 +60,9 @@ function main(): number {
       return 0;
     }
 
-    const strategies: Strategy[] = rows.map((row) => {
-      const items = envelopeItemsFor(handle.db, row.eventId);
-      const breakdown = row.breakdown as {
-        brandRelevance?: { name: string; value: number }[];
-      } | null;
-      const testability =
-        breakdown?.brandRelevance?.find((c) => c.name === 'testability')?.value ?? 0;
-
-      return buildStrategy({
-        eventId: row.eventId,
-        title: row.title,
-        summary: '',
-        category: row.category,
-        entities: row.entities,
-        // Testability comes from the Phase 5 breakdown when present, and falls back to
-        // the entity table. Reusing the measured component keeps the two layers
-        // consistent rather than letting them drift apart with separate rules.
-        testable:
-          testability > 0.5 ||
-          row.entities.some((entity) => (TESTABLE_ENTITIES[entity] ?? 0) >= 0.8),
-        hasVersionArtifact: items.some((item) => /v?\d+\.\d+|\bb\d{4,}\b/.test(item.title)),
-        hasOfficialSource: items.some((item) => item.isOfficial),
-        distinctSourceCount: row.distinctSourceCount,
-        // Wired from the evidence, not hardcoded. The first version passed 0 here,
-        // which silently disabled three of the seven DON'T POST reasons — the
-        // saturation and better-explained-elsewhere checks can never fire without it.
-        expertSourceCount: new Set(
-          items.filter((item) => item.sourceCategory === 'EXPERT_ANALYST').map((i) => i.sourceId),
-        ).size,
-        stillUnknown: [],
-        whatChanged: '',
-        importance: row.importance,
-        brandRelevance: row.brandRelevance,
-        combined: row.combined,
-        confidence: row.confidence,
-        hoursSinceEvent: Math.max(0, (now.getTime() - row.eventOccurredAt.getTime()) / 3_600_000),
-        doNotSay: [],
-        injectionFlagged: false,
-      });
-    });
+    const strategies: Strategy[] = rows.map((row) =>
+      strategyFromScore(row, envelopeItemsFor(handle.db, row.eventId), now),
+    );
 
     const stats = summariseStrategies(strategies);
 

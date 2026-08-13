@@ -30,3 +30,4 @@ export * from './score/index.js';
 export * from './security/injection-corpus.js';
 export * from './strategy/index.js';
 export * from './trends/index.js';
+export * from './alerts/index.js';

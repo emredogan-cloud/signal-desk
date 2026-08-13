@@ -137,7 +137,19 @@ export function loadScorableEvents(db: Db, limit = 10_000, afterId = 0): Scorabl
   return eventRows.map((row) => ({ ...row, evidence: byEvent.get(row.id) ?? [] }));
 }
 
-/** The latest score per event, joined to the event. The dashboard's stream query. */
+/**
+ * The latest score per event, joined to the event. The dashboard's stream query.
+ *
+ * `gatePassedOnly` filters **in SQL**, before the LIMIT. An earlier version applied
+ * the LIMIT first and filtered the result in JavaScript, so asking for 100 gate
+ * survivors returned however many happened to fall inside the top 100 by score — a
+ * partial set with no indication it was partial. That silently changed the measured
+ * restraint rate from 50.8% to 21.1% depending only on the `--limit` flag, and made
+ * the alerts CLI miss a manual-flagged event entirely.
+ *
+ * Same class of mistake as the Phase 5 pipeline bug: a LIMIT read as a ceiling when
+ * it is actually a truncation.
+ */
 export function latestScores(db: Db, limit = 50, gatePassedOnly = false) {
   const latest = db
     .select({
@@ -172,11 +184,12 @@ export function latestScores(db: Db, limit = 50, gatePassedOnly = false) {
     .from(eventScores)
     .innerJoin(latest, eq(latest.maxId, eventScores.id))
     .innerJoin(events, eq(events.id, eventScores.eventId))
+    .where(gatePassedOnly ? eq(eventScores.gatePassed, true) : undefined)
     .orderBy(desc(eventScores.combined))
     .limit(limit)
     .all();
 
-  return gatePassedOnly ? rows.filter((row) => row.gatePassed) : rows;
+  return rows;
 }
 
 /**
