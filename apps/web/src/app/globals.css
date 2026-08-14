@@ -463,15 +463,49 @@ a:hover {
 
 .ev {
   display: grid;
+  /* Two columns only. The brand mark and the chevron are hidden below, so the card's
+     four children would otherwise wrap into a second grid row and turn a one-line
+     index entry into a 290px block — which is exactly what happened on the first
+     render of the simplified layout. */
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 10px;
-  align-items: start;
+  align-items: center;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
-  padding: 10px 12px;
+  padding: 9px 12px;
   color: inherit;
+}
+/* §11: "No excessive metadata." In a scannable index a favicon stand-in and a chevron
+   are decoration; the score, the action and the title carry the whole decision. */
+.ev .ev-mark,
+.ev .ev-chev {
+  display: none;
+}
+.ev-title {
+  /* Two lines maximum. A wrapped title is fine; a five-line one stops being an index. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ev-meta {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+.ev-tags {
+  margin-top: 5px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+/* The category and entity chips are noise next to the action pill in a narrow column. */
+.ev-tags .tag {
+  display: none;
 }
 .ev:hover {
   background: var(--surface-2);
@@ -688,8 +722,7 @@ a:hover {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.detail *,
-.feed * {
+.detail * {
   min-width: 0;
 }
 

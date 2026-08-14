@@ -885,6 +885,74 @@ Fly machine $9.08 + volume $0.45. Minimum **$9.55/mo**, expected **$25–45**, h
 
 ---
 
+## O5. PROFILE LAUNCH + SIMPLIFIED DASHBOARD — 2026-08-14 (later)
+
+### The X token: I was wrong, and the way I was wrong mattered
+
+I had asserted X issues a 40-character access-token suffix and built a **hard gate** on
+it, so `pnpm x:verify` refused to send. The operator reported X producing 30 characters
+repeatedly. Checking properly: **X's credential documentation states no lengths at all**
+— my numbers came from a worked example in the 2011 signature docs.
+
+Worse than the wrong belief was the gate: it blocked the only call that could have
+corrected it. A guess that prevents its own falsification is worse than no check.
+
+Isolating the OAuth legs found the real fault:
+
+| Probe                               | Signed with                    | Result                           |
+| ----------------------------------- | ------------------------------ | -------------------------------- |
+| `POST /oauth/request_token`         | consumer key + secret **only** | `401 code 32`                    |
+| `GET /2/users/me` (app-only Bearer) | bearer                         | `403 Unsupported Authentication` |
+
+Bearer returning 403 proves the app is recognised. request_token failing without the
+access token being involved at all proves the consumer pair cannot do OAuth 1.0a.
+**The access token was never the problem: OAuth 1.0a user-context is not provisioned
+for this app.** Fix is in the developer portal (Settings → User authentication
+settings), then regenerate the token. Length was a red herring throughout.
+
+`credentialShapeProblems` now flags only the structurally impossible — an empty value,
+or an access token that is not `{numeric id}-{something}`. `deriveEffectiveModes` no
+longer degrades on length.
+
+### Dashboard simplified
+
+The rail, the KPI cluster and the bottom strip are gone, replaced by **one status
+line**: worker · sources · AI spend · X mode · freshest event. Infrastructure state is
+still visible but can now be read in a glance and ignored, which a sidebar of panels
+could not — it kept winning attention from the decision it was supposed to support.
+
+Left column is a compact scannable index (score, action, title, source, age); the
+intelligence workspace takes the remaining width. Nine events visible where two fitted
+before.
+
+**One bug worth recording:** the first render of the simplified feed produced 345px-tall
+rows. The grid went to two columns but the card still rendered four children, so they
+wrapped into a second row. The brand mark and chevron are now hidden — in a scannable
+index they were decoration anyway.
+
+**And a process trap, hit twice:** a stale `next start` on :3000 and then a test harness
+still pointed at production meant three consecutive rounds of "the CSS didn't apply"
+were actually "you are looking at the old deployed build". Check what the page is
+actually serving before changing the code again.
+
+### Deliverables for the operator
+
+`docs/X-PROFILE-AND-FIRST-CONTENT-TR.md` — avatar verdict, display name, three bio
+candidates, five banner concepts with GPT Image prompts, pinned post, today's first
+post (measured at 267/280 characters, not estimated), and the website diagnosis.
+
+**Avatar:** the supplied portrait is rejected as-is — dark hair on black shirt on dark
+grey is unreadable at 40px, and it carries AI-generation signatures. Conditional rule
+given: usable if it is genuinely his photograph, never if generated, because the whole
+positioning is "I test things and tell the truth".
+
+**Website:** `emredogan.work` is **not a Cloudflare problem**. NS records are
+`verify-contact-details.namecheap.com` and `failed-whois-verification.namecheap.com` —
+the domain is suspended by Namecheap for failed WHOIS verification. Fix is clicking the
+verification email, not touching DNS.
+
+---
+
 ## P. CONTINUATION PROTOCOL
 
 ```
