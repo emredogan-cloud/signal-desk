@@ -1,377 +1,248 @@
-import { modes, stream, health, trendCards, schemaReady } from '../lib/data';
-import { MockBadge } from '../components/mock-badge';
+import { health, modes, schemaReady, stream, type StreamRow } from '@/lib/data';
+import { brief } from '@/lib/brief';
+import { serverConfig } from '@/lib/env';
+import { Rail } from '@/components/rail';
+import { EventCard } from '@/components/event-card';
+import { Detail } from '@/components/detail';
+import { MockBadge } from '@/components/mock-badge';
 
 /**
- * The dashboard. `ROADMAP.md` Phase 10.
+ * The console.
  *
- * > **OBJECTIVE** The interface that makes the whole system usable in the 15 minutes
- * > the operator has.
+ * ## What changed in the rebuild, and why
  *
- * ## The 60-second constraint drives the layout
+ * The previous page was a single scrolling column: a mode badge, a brief, a health
+ * panel, then every event with its full strategy expanded inline. It rendered
+ * everything the system knew and made the operator do the ranking himself.
  *
- * The acceptance criterion is "operator can go from opening the dashboard to a decided
- * action in **under 60 seconds** for the top event". That rules out a design where the
- * recommendation is a click away: the top event's decision — the action, the option,
- * and the reasoning — is above the fold on the first render, and everything else is
- * progressive detail below it.
+ * §3 of the brief is the correction: the screen must answer "what happened that I
+ * should care about, and what do I do about it" *immediately*. So the shape is now
+ * rail / ranked feed / decision panel, and the expensive per-event work — analysis
+ * payload, strategy, drafts, media plan — happens for **one** event, the selected one,
+ * rather than for forty.
  *
- * `<details>` elements carry the breakdowns rather than JavaScript toggles, because a
- * strict CSP with no `unsafe-inline` is part of the same phase and native disclosure
- * needs no script at all.
+ * ## Selection is a URL, not client state
  *
- * Server components throughout, with no `'use client'` anywhere. Next still ships its
- * own runtime — the served page carries eight script tags — so the accurate claim is
- * narrower than "no JavaScript": **none of the shipped script is ours, and none of it
- * is inline**, which is what lets the CSP omit `unsafe-inline` and a nonce pipeline.
+ * `?event=123` is server-rendered. That keeps the entire console server-side except
+ * the copy buttons, which means the detail panel is never a loading spinner and the
+ * operator can bookmark or share a specific brief. It also keeps the client bundle to
+ * one small component — see `copy-button.tsx` for why that one is worth it.
  */
 
 export const dynamic = 'force-dynamic';
 
-type Mode = 'brief' | 'live' | 'eod';
+const TABS = [
+  { id: 'priority', label: 'ÖNCELİKLİ' },
+  { id: 'all', label: 'TÜM OLAYLAR' },
+  { id: 'post', label: 'PAYLAŞILABİLİR' },
+] as const;
 
-function pct(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
+type Search = Record<string, string | string[] | undefined>;
+
+function one(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+/** Rank, then explain the ranking. See `event-card.tsx` for what each signal carries. */
+function rank(rows: readonly StreamRow[], tab: string): StreamRow[] {
+  const ACTION_WEIGHT: Record<string, number> = {
+    POST_NOW: 4,
+    POST_SOON: 3,
+    VERIFY: 2,
+    WAIT: 1,
+    DONT_POST: 0,
+  };
+
+  const filtered =
+    tab === 'post'
+      ? rows.filter(
+          (row) =>
+            ACTION_WEIGHT[row.strategy.recommendation.action] !== undefined &&
+            ACTION_WEIGHT[row.strategy.recommendation.action]! >= 3,
+        )
+      : tab === 'all'
+        ? rows
+        : rows.filter((row) => row.gatePassed);
+
+  // Sorted by what to do first, then by score. §5: "Do NOT simply sort by raw score."
+  // An 88 that the system says to WAIT on is genuinely below a 71 it says to post now.
+  return [...filtered].sort((a, b) => {
+    const byAction =
+      (ACTION_WEIGHT[b.strategy.recommendation.action] ?? 0) -
+      (ACTION_WEIGHT[a.strategy.recommendation.action] ?? 0);
+    if (byAction !== 0) return byAction;
+    return b.combined - a.combined;
+  });
+}
+
+export default async function Page({ searchParams }: { searchParams: Promise<Search> }) {
   const params = await searchParams;
-  const raw = params.mode;
-  const mode: Mode = raw === 'live' ? 'live' : raw === 'eod' ? 'eod' : 'brief';
+  const tab = one(params.tab) ?? 'priority';
+  const requested = Number(one(params.event) ?? '');
 
+  const config = serverConfig();
   const effective = modes();
-  const ready = schemaReady();
-  const rows = stream(mode === 'brief' ? 5 : 40);
-  const stats = health();
-  const trends = trendCards();
+  const now = new Date();
 
-  const actionable = rows.filter(
-    (row) =>
-      row.strategy.recommendation.action === 'POST_NOW' ||
-      row.strategy.recommendation.action === 'POST_SOON',
-  );
-  const top = actionable[0] ?? rows[0];
-  const flagged = rows.filter((row) => row.strategy.recommendation.manualFlag);
+  if (!schemaReady()) {
+    return (
+      <main style={{ padding: 40 }}>
+        <h1>Veritabanı henüz hazır değil</h1>
+        <p>
+          Panel okur; şemayı worker yazar ve yönetir. Önce <code>pnpm ingest:once</code>, sonra{' '}
+          <code>pnpm cluster</code> ve <code>pnpm score</code> çalıştırın.
+        </p>
+      </main>
+    );
+  }
 
-  return (
-    <main>
-      <MockBadge modes={effective} />
-
-      <nav className="modes" aria-label="Dashboard mode">
-        <a href="/?mode=brief" aria-current={mode === 'brief' ? 'page' : undefined}>
-          MORNING BRIEF
-        </a>
-        <a href="/?mode=live" aria-current={mode === 'live' ? 'page' : undefined}>
-          LIVE
-        </a>
-        <a href="/?mode=eod" aria-current={mode === 'eod' ? 'page' : undefined}>
-          END OF DAY
-        </a>
-      </nav>
-
-      {/* ── The dashboard does not migrate; the worker owns the schema. Saying so is
-             better than a raw SQLite error, which is what the first run produced. */}
-      {!ready && (
-        <section className="empty" role="alert">
-          <h1>The database has no schema yet.</h1>
-          <p>
-            The dashboard reads; the worker writes and owns migrations. Run <code>pnpm ingest</code>
-            , then <code>pnpm score</code>, then reload.
-          </p>
-        </section>
-      )}
-
-      {/* ── The decision, first. This is the 60-second path. */}
-      {top === undefined ? (
-        <section className="empty">
-          <h1>Nothing has cleared the gate.</h1>
-          <p>
-            Ingestion, clustering, scoring, and the rule gate all ran. No event passed. That is a
-            result, not an error — the health panel below shows whether the sources are alive.
-          </p>
-        </section>
-      ) : (
-        <section className="decision" aria-labelledby="decision-heading">
-          <h1 id="decision-heading">
-            <span className={`action action-${top.strategy.recommendation.action.toLowerCase()}`}>
-              {top.strategy.recommendation.action.replace('_', ' ')}
-            </span>{' '}
-            {top.title}
-          </h1>
-
-          <p className="reasoning">{top.strategy.recommendation.reasoning}</p>
-
-          <dl className="panel">
-            <dt>WHY NOW</dt>
-            <dd>{top.strategy.panel.whyNow}</dd>
-            <dt>WHY ME</dt>
-            <dd>{top.strategy.panel.whyMe}</dd>
-            <dt>WHAT CAN I ADD</dt>
-            <dd>{top.strategy.panel.whatCanIAdd}</dd>
-            <dt>EXPECTED OUTCOME</dt>
-            <dd>{top.strategy.panel.expectedOutcome}</dd>
-          </dl>
-
-          {top.strategy.doNotSay.length > 0 && (
-            <div className="do-not-say">
-              <h2>DO NOT SAY</h2>
-              <ul>
-                {top.strategy.doNotSay.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <details>
-            <summary>All five options</summary>
-            <ul className="options">
-              {top.strategy.options.map((option) => (
-                <li key={option.kind}>
-                  <strong>{option.kind}</strong>{' '}
-                  <span className="fit">{option.fit.toFixed(2)}</span>
-                  <p>{option.approach}</p>
-                  <p className="muted">{option.rationale}</p>
-                </li>
-              ))}
-            </ul>
-          </details>
-
-          <details>
-            <summary>
-              Score breakdown — importance {top.importance}, relevance {top.brandRelevance},
-              combined {top.combined}, confidence {top.confidence}
-            </summary>
-            <ScoreBreakdown breakdown={top.breakdown} caps={top.caps} />
-          </details>
-        </section>
-      )}
-
-      {/* ── Health. Positioned high because a dead source must be noticed
-             WITHOUT being looked for (Phase 10 acceptance). */}
-      <section
-        className={stats.deadSources > 0 ? 'health health-alarm' : 'health'}
-        aria-labelledby="health-heading"
-      >
-        <h2 id="health-heading">
-          HEALTH
-          {stats.deadSources > 0 && (
-            <span className="alarm" role="alert">
-              {stats.deadSources} SOURCE{stats.deadSources === 1 ? '' : 'S'} SILENT &gt;48h
-            </span>
-          )}
-        </h2>
-        <dl className="metrics">
-          <div>
-            <dt>gate kill rate</dt>
-            <dd>
-              {pct(stats.gate.killRate)}{' '}
-              <span className="muted">({pct(stats.gate.inWindowKillRate)} in-window)</span>
-            </dd>
-          </div>
-          <div>
-            <dt>cost today</dt>
-            <dd>${stats.costTodayUsd.toFixed(4)}</dd>
-          </div>
-          <div>
-            <dt>calls today</dt>
-            <dd>{stats.callsToday}</dd>
-          </div>
-          <div>
-            <dt>cache reads</dt>
-            <dd>
-              {stats.cacheReadTokens === 0 && stats.callsToday > 1 ? (
-                <span className="alarm">0 — prefix not caching</span>
-              ) : (
-                `${stats.cacheReadTokens} tok`
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt>events past gate</dt>
-            <dd>
-              {stats.gate.total - stats.gate.killed} of {stats.gate.total}
-            </dd>
-          </div>
-        </dl>
-
-        <details>
-          <summary>Source freshness ({stats.sources.length} active)</summary>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">source</th>
-                <th scope="col">last success</th>
-                <th scope="col">failures</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.sources.map((source) => {
-                const dead = source.hoursSinceSuccess === null || source.hoursSinceSuccess > 48;
-                return (
-                  <tr key={source.id} className={dead ? 'dead' : undefined}>
-                    <td>{source.id}</td>
-                    <td>
-                      {source.hoursSinceSuccess === null
-                        ? 'never'
-                        : `${source.hoursSinceSuccess.toFixed(1)}h ago`}
-                    </td>
-                    <td>{source.consecutiveFailures}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </details>
-      </section>
-
-      {/* ── Suspicious content. THREAT-MODEL §T-1 mitigation 6: flagged content is
-             surfaced, never silently dropped. */}
-      {flagged.length > 0 && (
-        <section className="suspicious" aria-labelledby="suspicious-heading">
-          <h2 id="suspicious-heading">SUSPICIOUS CONTENT ({flagged.length})</h2>
-          <p className="muted">
-            Flagged and kept, not dropped. A filter the operator cannot inspect is one he cannot
-            trust.
-          </p>
-          <ul>
-            {flagged.map((row) => (
-              <li key={row.eventId}>
-                {row.title}
-                <p className="muted">{row.strategy.recommendation.forcing.reason}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* ── The stream. */}
-      <section className="stream" aria-labelledby="stream-heading">
-        <h2 id="stream-heading">
-          {mode === 'brief' ? 'TOP 5' : mode === 'eod' ? 'TODAY' : 'LIVE STREAM'} ({rows.length})
-        </h2>
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">action</th>
-              <th scope="col">event</th>
-              <th scope="col">cat</th>
-              <th scope="col">imp</th>
-              <th scope="col">rel</th>
-              <th scope="col">conf</th>
-              <th scope="col">src</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.eventId}>
-                <td>
-                  <span
-                    className={`action action-${row.strategy.recommendation.action.toLowerCase()}`}
-                  >
-                    {row.strategy.recommendation.action.replace('_', ' ')}
-                  </span>
-                </td>
-                <td>{row.title}</td>
-                <td>{row.category}</td>
-                <td className="num">{row.importance}</td>
-                <td className="num">{row.brandRelevance}</td>
-                <td>{row.confidence}</td>
-                <td className="num">{row.distinctSourceCount}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      {mode === 'eod' && (
-        <section className="eod" aria-labelledby="eod-heading">
-          <h2 id="eod-heading">END OF DAY</h2>
-          <p>
-            {rows.length} event(s) cleared the gate. {actionable.length} carried a publishable
-            recommendation; {rows.length - actionable.length} did not, which is the system
-            exercising judgment rather than failing to find anything.
-          </p>
-          <p className="muted">
-            What was missed is not knowable from inside the system — that is what the Phase 12
-            feedback loop is for.
-          </p>
-        </section>
-      )}
-
-      {trends.length > 0 && (
-        <section className="trends" aria-labelledby="trends-heading">
-          <h2 id="trends-heading">TRENDS ({trends.length})</h2>
-          <ul>
-            {trends.map((card) => (
-              <li key={card.name}>
-                <strong>{card.name}</strong> <span className="muted">{card.platform}</span>{' '}
-                <span className={`stage stage-${card.lifecycle.stage.toLowerCase()}`}>
-                  {card.lifecycle.stage}
-                </span>{' '}
-                → {card.lifecycle.decision}
-                <p className="muted">{card.lifecycle.explanation}</p>
-                {card.missing.length > 0 && (
-                  <p className="muted">MISSING: {card.missing.join('; ')}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </main>
-  );
-}
-
-/** Renders a stored score breakdown. Every component with its own explanation. */
-function ScoreBreakdown({ breakdown, caps }: { breakdown: unknown; caps: string[] }) {
-  const parsed = breakdown as Record<
-    string,
-    { name: string; value: number; weight: number; contribution: number; explanation: string }[]
-  > | null;
-
-  if (parsed === null) return <p className="muted">No stored breakdown.</p>;
+  const rows = stream(200);
+  const ranked = rank(rows, tab);
+  const selectedId = Number.isFinite(requested) && requested > 0 ? requested : ranked[0]?.eventId;
+  const selected = selectedId === undefined ? undefined : brief(selectedId);
+  const systemHealth = health();
 
   return (
     <>
-      {caps.length > 0 && (
-        <div className="caps">
-          <strong>Caps applied:</strong>
-          <ul>
-            {caps.map((cap) => (
-              <li key={cap}>{cap}</li>
+      <MockBadge modes={effective} />
+      <div className="shell">
+        <Rail
+          modes={effective}
+          health={systemHealth}
+          aiBudget={config.AI_DAILY_BUDGET_USD}
+          xBudget={config.X_DAILY_BUDGET_USD}
+          xSpend={0}
+          alerts={systemHealth.deadSources}
+        />
+
+        <div className="centre">
+          <header className="topbar">
+            <div>
+              <h1>Günün Özeti</h1>
+              <div className="topbar-sub">
+                {now.toLocaleDateString('tr-TR', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  weekday: 'long',
+                  timeZone: config.TZ,
+                })}
+              </div>
+            </div>
+
+            <div className="kpis">
+              <div className="kpi">
+                <div className="kpi-k">Toplam Olay</div>
+                <div className="kpi-v">{systemHealth.gate.total.toLocaleString('tr-TR')}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-k">Kapıdan Geçen</div>
+                <div className="kpi-v">{systemHealth.gate.total - systemHealth.gate.killed}</div>
+                <div className="kpi-note">
+                  %{((1 - systemHealth.gate.killRate) * 100).toFixed(1)}
+                </div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-k">AI Çağrısı</div>
+                <div className="kpi-v">{systemHealth.callsToday}</div>
+                <div className="kpi-note">${systemHealth.costTodayUsd.toFixed(4)}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-k">Sessiz Kaynak</div>
+                <div className="kpi-v">{systemHealth.deadSources}</div>
+                <div className="kpi-note">/ {systemHealth.sources.length}</div>
+              </div>
+            </div>
+          </header>
+
+          <nav className="tabs" aria-label="Görünüm">
+            {TABS.map((entry) => (
+              <a
+                key={entry.id}
+                href={`/?tab=${entry.id}`}
+                className="tab"
+                {...(entry.id === tab ? { 'aria-current': 'page' as const } : {})}
+              >
+                {entry.label}
+                <span className="tab-count">{rank(rows, entry.id).length}</span>
+              </a>
             ))}
-          </ul>
+          </nav>
+
+          <div className="feed">
+            {ranked.length === 0 ? (
+              <div className="empty">
+                <strong>Kapıyı geçen olay yok</strong>
+                Toplama, kümeleme, skorlama ve kural kapısı çalıştı; hiçbir olay geçemedi. Bu bir
+                hata değil, bir sonuç — soldaki panel kaynakların canlı olup olmadığını gösterir.
+              </div>
+            ) : (
+              ranked
+                .slice(0, 40)
+                .map((row) => (
+                  <EventCard
+                    key={row.eventId}
+                    row={row}
+                    now={now}
+                    tab={tab}
+                    selected={row.eventId === selectedId}
+                  />
+                ))
+            )}
+          </div>
+
+          <div className="strip">
+            <div className="strip-card">
+              <span className="strip-ic" aria-hidden="true">
+                ◷
+              </span>
+              <div>
+                <div className="strip-k">KURAL KAPISI</div>
+                <div className="strip-v">
+                  %{(systemHealth.gate.killRate * 100).toFixed(1)} eleme — pencere içi %
+                  {(systemHealth.gate.inWindowKillRate * 100).toFixed(1)}
+                </div>
+              </div>
+            </div>
+            <div className="strip-card">
+              <span className="strip-ic" aria-hidden="true">
+                ◔
+              </span>
+              <div>
+                <div className="strip-k">ÖNBELLEK</div>
+                <div className="strip-v">
+                  {systemHealth.cacheReadTokens.toLocaleString('tr-TR')} token okundu
+                </div>
+              </div>
+            </div>
+            <div className="strip-card">
+              <span className="strip-ic" aria-hidden="true">
+                ◈
+              </span>
+              <div>
+                <div className="strip-k">YAYINLAMA</div>
+                <div className="strip-v">
+                  {effective.postingEnabled ? 'Etkin' : 'Kapalı — her gönderi elle onaylanır'}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-      {Object.entries(parsed).map(([axis, components]) => (
-        <div key={axis}>
-          <h3>{axis}</h3>
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">component</th>
-                <th scope="col">value</th>
-                <th scope="col">weight</th>
-                <th scope="col">why</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(components ?? []).map((component) => (
-                <tr key={component.name}>
-                  <td>{component.name}</td>
-                  <td className="num">{component.value.toFixed(2)}</td>
-                  <td className="num">{component.weight.toFixed(2)}</td>
-                  <td>{component.explanation}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+
+        {selected === undefined ? (
+          <section className="detail" aria-label="Olay detayı">
+            <div className="detail-inner">
+              <div className="empty">
+                <strong>Bir olay seçin</strong>
+                Soldaki listeden bir olaya tıklayın; ne olduğu, neden önemli olduğu ve ne yapmanız
+                gerektiği burada görünecek.
+              </div>
+            </div>
+          </section>
+        ) : (
+          <Detail brief={selected} now={now} />
+        )}
+      </div>
     </>
   );
 }

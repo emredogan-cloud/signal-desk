@@ -24,8 +24,8 @@ import { envelopeInstructions } from './envelope.js';
  * to it rather than embedding it in the cached body.
  */
 
-export const TRIAGE_PROMPT_VERSION = 'triage-v2-2026-08-13';
-export const ANALYSIS_PROMPT_VERSION = 'analysis-v4-2026-08-13';
+export const TRIAGE_PROMPT_VERSION = 'triage-v5-2026-08-14';
+export const ANALYSIS_PROMPT_VERSION = 'analysis-v7-2026-08-14';
 
 /**
  * The triage system prompt — the cached prefix for every Haiku call.
@@ -486,6 +486,49 @@ Good entries are specific to this event and this evidence:
 - "Do not say the price dropped for everyone; the change is for the batch API only."
 
 Not: "do not exaggerate", "do not speculate". Those are advice, not entries.
+
+# draftMaterial
+
+Four single sentences that a separate, non-AI step assembles into posts. You are NOT
+writing a post. Do not add hashtags, @handles, links, emoji, or a call to action — the
+assembler strips them, and a stripped line wastes the analysis it came from.
+
+  hook          The most surprising true thing here, stated flatly. The surprise must
+                come from the fact, never from the adjective. "Ships with a 1M context
+                window" — not "a game-changing context window".
+  substance     The concrete detail that makes it real: a version string, a number, a
+                price, a model id. If there is no such detail, say what is missing.
+  soWhat        Why someone who ships software should care. One clause, no hedging.
+  testableClaim Something the operator could verify himself within an hour, if
+                anything. Empty string when the event is not testable. An invented
+                experiment is worse than none — he will run it and find out.
+
+Write for a competent engineer who has not seen the announcement. Banned throughout:
+"game changer", "huge", "insane", "the future is here", "this changes everything",
+"let that sink in". If the sentence still works with the word removed, remove it.
+
+# attentionDrivers and attentionReason
+
+Which of the listed dynamics genuinely apply to THIS event, and one sentence saying why.
+These are properties of the event, not tactics. If none apply, return an empty array —
+that is a common and correct answer.
+
+Do not reason about what would provoke a reaction. Reason about what is true and
+unusual. 'attentionReason' should read as an assessment ("independently testable today,
+and the before/after gap is a factor of four"), not as encouragement.
+
+# mediaIdea
+
+What visual would turn a comment into evidence.
+
+  kind          'none' is correct most of the time. Choose it freely.
+  whatToShow    Concretely what is on screen. "A chart" is not an answer; "p50 latency
+                before and after, same prompt, same hardware" is.
+  sourceHint    Where the raw material comes from — a specific page, endpoint, command,
+                or the official announcement image.
+
+Recommend a screen recording only when motion carries information a still cannot. Most
+events are a screenshot or nothing.
 
 # Rules that override everything above
 

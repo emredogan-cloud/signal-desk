@@ -13,17 +13,37 @@ import type { EffectiveModes } from '@signal-desk/shared';
  */
 export function MockBadge({ modes }: { modes: EffectiveModes }) {
   const mocked: string[] = [];
-  if (modes.dataMode === 'MOCK') mocked.push('DATA (no real sources fetched)');
-  if (modes.aiMode === 'MOCK') mocked.push('AI (no model called — analyses are placeholders)');
-  if (modes.xMode === 'MOCK') mocked.push('X (no platform access)');
+  if (modes.dataMode === 'MOCK') mocked.push('VERİ — gerçek kaynak çekilmiyor');
+  if (modes.aiMode === 'MOCK') mocked.push('AI — model çağrılmıyor, analizler yer tutucu');
+  if (modes.xMode === 'MOCK') mocked.push('X — platform erişimi yok');
 
   if (mocked.length === 0) return null;
 
+  // The degradation reasons, not just the fact of degradation. `deriveEffectiveModes`
+  // knows *why* each subsystem fell back — for X on 2026-08-14 that reason was a
+  // malformed access token, which is actionable in a way that the word "MOCK" is not.
+  const reasons = modes.degradations.map((entry) => entry.because);
+
   return (
-    <div className="mock-badge" role="status" aria-live="polite">
-      <strong>MOCK MODE</strong>
+    <div className="mock-banner" role="status" aria-live="polite">
+      <strong>MOCK MOD</strong>
       <span>{mocked.join(' · ')}</span>
-      <span className="mock-badge-warning">Nothing on this screen is a live result.</span>
+      <span>Bu ekrandaki her şey canlı sonuç değildir.</span>
+      {reasons.length > 0 ? (
+        <details>
+          <summary className="more">Neden?</summary>
+          <ul className="list" style={{ marginTop: 6 }}>
+            {reasons.map((reason, index) => (
+              <li key={index}>
+                <span className="li-mark li-q" aria-hidden="true">
+                  !
+                </span>
+                <span>{reason}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

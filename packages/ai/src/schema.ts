@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { CONFIDENCE_LEVELS, EVIDENCE_TAGS, EVENT_CATEGORIES } from '@signal-desk/shared';
+import {
+  ATTENTION_DRIVERS,
+  CONFIDENCE_LEVELS,
+  EVIDENCE_TAGS,
+  EVENT_CATEGORIES,
+  MEDIA_KINDS,
+} from '@signal-desk/shared';
 
 /**
  * Output schemas for every model call.
@@ -75,6 +81,74 @@ export const triageSchema = z
 
 export type TriageResult = z.infer<typeof triageSchema>;
 
+/**
+ * Raw material for a post. **Not a post.**
+ *
+ * The division of labour, decided 2026-08-14: the model writes *lines*, and
+ * `packages/core` assembles the *post*. The reason is not stylistic. A finished post
+ * emitted by a model that has just read untrusted third-party content is a string the
+ * operator is being invited to paste onto his own timeline — the character limit, the
+ * do-not-say list, and the absence of injected handles or links would all be things the
+ * model **promised**, not things the code **guarantees**. `composeDrafts` treats every
+ * field here as untrusted input and enforces all three.
+ *
+ * Each field is one sentence because that is what composition needs. Asking for
+ * paragraphs and then cutting them is how drafts end mid-clause.
+ *
+ * ## Why the bounds are far larger than a post
+ *
+ * `substance` is capped at 800 characters for a line that will be trimmed to fit inside
+ * 280. That looks wrong and is deliberate — it is the lesson `MAX_REASON_CHARS` above
+ * already paid for, applied a second time because the first application did not
+ * generalise.
+ *
+ * On 2026-08-14 these were capped at post-sized lengths (200/240/240/240). Two live
+ * Opus analyses came back with a `substance` line of roughly 250 characters, Zod
+ * rejected the **entire analysis** over it, and **$0.3563 of completed work was
+ * discarded** — including the what-changed, the claims, and the do-not-say list, none
+ * of which had anything wrong with them. Structured outputs do not carry `maxLength`,
+ * so the model could not see the bound it was breaking.
+ *
+ * The prompt asks for one sentence; the schema tolerates a model that wrote one long
+ * one; `composeDrafts` enforces the limit that actually matters. Rejection stays
+ * reserved for things that are genuinely wrong — shape, evidence ids, provenance.
+ */
+export const draftMaterialSchema = z
+  .object({
+    /** The most surprising true thing, stated flatly. No adjectives doing the work. */
+    hook: z.string().min(1).max(600),
+    /** The concrete detail that makes it real: a version, a number, a name, a price. */
+    substance: z.string().min(1).max(800),
+    /** Why someone who ships software should care. One clause, no hedging. */
+    soWhat: z.string().min(1).max(600),
+    /**
+     * Something the operator could verify himself in under an hour, if anything.
+     * Empty when the event is not testable — an invented experiment is worse than none.
+     */
+    testableClaim: z.string().max(600),
+  })
+  .strict();
+
+export type DraftMaterial = z.infer<typeof draftMaterialSchema>;
+
+/**
+ * What visual would make the post carry original evidence rather than commentary.
+ *
+ * `none` is a first-class answer and the correct one most of the time. A system that
+ * always recommends a video teaches the operator to ignore the recommendation.
+ */
+export const mediaIdeaSchema = z
+  .object({
+    kind: z.enum(MEDIA_KINDS),
+    /** Concretely what is on screen. "A chart" is not an answer; "p50 latency before and after" is. */
+    whatToShow: z.string().max(600),
+    /** Where the raw material comes from — a specific page, endpoint, or command. */
+    sourceHint: z.string().max(300),
+  })
+  .strict();
+
+export type MediaIdea = z.infer<typeof mediaIdeaSchema>;
+
 export const analysisSchema = z
   .object({
     whatHappened: z.string().min(1).max(2500),
@@ -105,6 +179,12 @@ export const analysisSchema = z
      * overstatements are visible.
      */
     doNotSay: z.array(z.string().min(1).max(600)).max(10),
+    /** Lines for `composeDrafts` to assemble. See `draftMaterialSchema`. */
+    draftMaterial: draftMaterialSchema,
+    /** Which legitimate attention dynamics apply, and why. Drivers may be empty. */
+    attentionDrivers: z.array(z.enum(ATTENTION_DRIVERS)).max(6),
+    attentionReason: z.string().max(600),
+    mediaIdea: mediaIdeaSchema,
     injectionObserved: z.boolean(),
     injectionNote: z.string().max(1000),
   })
@@ -180,6 +260,29 @@ export const ANALYSIS_JSON_SCHEMA = {
     confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS] },
     recommendedAction: { type: 'string', enum: [...RECOMMENDED_ACTIONS] },
     doNotSay: { type: 'array', items: { type: 'string' } },
+    draftMaterial: {
+      type: 'object',
+      properties: {
+        hook: { type: 'string' },
+        substance: { type: 'string' },
+        soWhat: { type: 'string' },
+        testableClaim: { type: 'string' },
+      },
+      required: ['hook', 'substance', 'soWhat', 'testableClaim'],
+      additionalProperties: false,
+    },
+    attentionDrivers: { type: 'array', items: { type: 'string', enum: [...ATTENTION_DRIVERS] } },
+    attentionReason: { type: 'string' },
+    mediaIdea: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: [...MEDIA_KINDS] },
+        whatToShow: { type: 'string' },
+        sourceHint: { type: 'string' },
+      },
+      required: ['kind', 'whatToShow', 'sourceHint'],
+      additionalProperties: false,
+    },
     injectionObserved: { type: 'boolean' },
     injectionNote: { type: 'string' },
   },
@@ -194,6 +297,10 @@ export const ANALYSIS_JSON_SCHEMA = {
     'confidence',
     'recommendedAction',
     'doNotSay',
+    'draftMaterial',
+    'attentionDrivers',
+    'attentionReason',
+    'mediaIdea',
     'injectionObserved',
     'injectionNote',
   ],

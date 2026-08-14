@@ -256,77 +256,14 @@ export async function xGet<T>(path: string, options: XGetOptions): Promise<XResp
 }
 
 /**
- * The shapes X's key generator actually produces.
+ * Moved to `@signal-desk/shared` on 2026-08-14.
  *
- * ### Why a length check earns its place — 2026-08-14
- *
- * The first live run returned `401 Unauthorized`, which is the same body for a bad
- * signature, a revoked token, an unenrolled app, and a mistyped key. Eliminating the
- * signature took a published test vector; eliminating the app took an app-only bearer
- * call that returned `403 Unsupported Authentication` (i.e. *authenticated*, wrong
- * auth type for the endpoint). What was left was the credentials — and the access
- * token turned out to carry a **30-character suffix where X issues 40**. It had been
- * copied short, twice, into two different variable names.
- *
- * That cost six metered requests to discover something that is free to check. A
- * 50-character access token is not a plausible token; it is a truncated one, and the
- * only correct response is to refuse to send and say which field is wrong.
- *
- * Lengths are asserted, not the alphabet: X has changed the character set of these
- * values before and a strict pattern would reject a valid future credential. Length is
- * the part that catches the real failure — a partial paste — without guessing.
+ * It validates configuration, not transport, and `deriveEffectiveModes` needs it to
+ * decide whether X is *really* live — which is the difference between a dashboard
+ * badge that is true and one that is merely optimistic. Re-exported here so the client
+ * and its tests keep one import path.
  */
-export const X_CREDENTIAL_SHAPE = {
-  apiKey: 25,
-  apiSecret: 50,
-  /** `{user_id}-{40 chars}` — the suffix is the part that gets cut off. */
-  accessTokenSuffix: 40,
-  accessTokenSecret: 45,
-} as const;
-
-/** Human-readable problems with the credential *shapes*. Empty means "worth sending". */
-export function credentialShapeProblems(credentials: XCredentials): string[] {
-  const problems: string[] = [];
-
-  const check = (name: string, value: string, expected: number): void => {
-    if (value === '') problems.push(`${name} is empty`);
-    else if (value.length !== expected) {
-      problems.push(
-        `${name} is ${value.length} characters; X issues ${expected}` +
-          (value.length < expected ? ' — this looks like a partial paste' : ''),
-      );
-    }
-  };
-
-  check('X_API_KEY', credentials.apiKey, X_CREDENTIAL_SHAPE.apiKey);
-  check('X_API_SECRET', credentials.apiSecret, X_CREDENTIAL_SHAPE.apiSecret);
-  check(
-    'X_ACCESS_TOKEN_SECRET',
-    credentials.accessTokenSecret,
-    X_CREDENTIAL_SHAPE.accessTokenSecret,
-  );
-
-  const [userId, ...rest] = credentials.accessToken.split('-');
-  const suffix = rest.join('-');
-  if (credentials.accessToken === '') {
-    problems.push('X_ACCESS_TOKEN is empty');
-  } else if (rest.length === 0) {
-    problems.push('X_ACCESS_TOKEN has no "-" — the form is {user_id}-{40 characters}');
-  } else if (!/^\d+$/.test(userId ?? '')) {
-    problems.push('X_ACCESS_TOKEN does not start with a numeric user id');
-  } else if (suffix.length !== X_CREDENTIAL_SHAPE.accessTokenSuffix) {
-    problems.push(
-      `X_ACCESS_TOKEN's suffix is ${suffix.length} characters; X issues ` +
-        `${X_CREDENTIAL_SHAPE.accessTokenSuffix}` +
-        (suffix.length < X_CREDENTIAL_SHAPE.accessTokenSuffix
-          ? ' — the token was copied short. Regenerate it in the X developer console ' +
-            '(Keys and tokens → Access Token and Secret) and copy the whole value.'
-          : ''),
-    );
-  }
-
-  return problems;
-}
+export { X_CREDENTIAL_SHAPE, credentialShapeProblems } from '@signal-desk/shared';
 
 export type XAccount = {
   readonly id: string;

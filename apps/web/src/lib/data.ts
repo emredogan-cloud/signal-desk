@@ -2,6 +2,7 @@ import 'server-only';
 import {
   openDatabase,
   latestScores,
+  analysisContextFor,
   gateKillRate,
   spendSince,
   spendBreakdown,
@@ -111,8 +112,17 @@ export function stream(limit = 40): StreamRow[] {
   const { handle } = open();
   try {
     const now = new Date();
-    return readOr<StreamRow[]>([], () =>
-      latestScores(handle.db, limit, true).map((row) => {
+    return readOr<StreamRow[]>([], () => {
+      const rows = latestScores(handle.db, limit, true);
+      // One query for the page. See `analysisContextFor` for the two-recommendations
+      // bug that made this necessary: the list must reason from the same inputs the
+      // detail panel does, or it quietly gives a less-informed verdict.
+      const context = analysisContextFor(
+        handle.db,
+        rows.map((row) => row.eventId),
+      );
+
+      return rows.map((row) => {
         const items = envelopeItemsFor(handle.db, row.eventId);
         const breakdown = row.breakdown as {
           brandRelevance?: { name: string; value: number }[];
@@ -134,15 +144,15 @@ export function stream(limit = 40): StreamRow[] {
           expertSourceCount: new Set(
             items.filter((i) => i.sourceCategory === 'EXPERT_ANALYST').map((i) => i.sourceId),
           ).size,
-          stillUnknown: [],
+          stillUnknown: context.get(row.eventId)?.stillUnknown ?? [],
           whatChanged: '',
           importance: row.importance,
           brandRelevance: row.brandRelevance,
           combined: row.combined,
           confidence: row.confidence,
           hoursSinceEvent: Math.max(0, (now.getTime() - row.eventOccurredAt.getTime()) / 3_600_000),
-          doNotSay: [],
-          injectionFlagged: false,
+          doNotSay: context.get(row.eventId)?.doNotSay ?? [],
+          injectionFlagged: context.get(row.eventId)?.injectionObserved ?? false,
         });
 
         return {
@@ -163,8 +173,8 @@ export function stream(limit = 40): StreamRow[] {
           breakdown: row.breakdown,
           strategy,
         };
-      }),
-    ).value;
+      });
+    }).value;
   } finally {
     handle.close();
   }

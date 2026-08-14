@@ -33,21 +33,38 @@ import { parseConfig, databaseFilePath, findRepoRoot, type Config } from '@signa
  */
 
 let cached: Config | undefined;
+let envLoaded = false;
 
 /**
- * Load the root `.env` once per process, then parse.
+ * Load the root `.env` into `process.env`. Idempotent.
  *
- * `process.loadEnvFile` never overwrites a variable already present in
- * `process.env`, so a value injected by the host (systemd, a container, `vercel env`)
- * still wins over the file — which is what a production deployment depends on.
+ * **Called from `instrumentation.ts` at server start, not lazily from a render.** That
+ * ordering is load-bearing rather than tidy: `proxy.ts` runs before any page and reads
+ * the same `process.env`, so a lazy load during the first render meant the proxy
+ * authenticated against a different configuration on request 1 than on request 2. See
+ * the note in `instrumentation.ts` for the measurement.
+ *
+ * `process.loadEnvFile` never overwrites a variable already present in `process.env`
+ * (verified, not assumed), so a value injected by the host — systemd, a container, a
+ * Fly secret — still wins over the file. That is what production depends on, and it is
+ * why the production image ships no `.env` at all.
  */
+export function loadRootEnv(): void {
+  if (envLoaded) return;
+  envLoaded = true;
+
+  const envFile = resolve(findRepoRoot(), '.env');
+  if (existsSync(envFile)) process.loadEnvFile(envFile);
+}
+
 export function serverConfig(): Config {
   if (cached !== undefined) return cached;
 
-  const root = findRepoRoot();
-  const envFile = resolve(root, '.env');
-  if (existsSync(envFile)) process.loadEnvFile(envFile);
+  // Defensive: `register()` should already have run. Calling again is a no-op, and
+  // relying on it alone is what produced the request-1-differs bug.
+  loadRootEnv();
 
+  const root = findRepoRoot();
   const parsed = parseConfig(process.env);
 
   // A relative `file:` URL means "relative to the repository", not "relative to

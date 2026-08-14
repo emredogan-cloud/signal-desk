@@ -3,13 +3,13 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'signal-desk',
-  description: 'Intelligence and authority operations console.',
+  title: 'signal-desk — AI Intelligence Studio',
+  description: 'Gerçek zamanlı AI ve teknoloji istihbaratı, X içerik operasyonları.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="tr">
       <body>{children}</body>
     </html>
   );

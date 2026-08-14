@@ -92,6 +92,23 @@ export function mockAnalysis(title: string, items: readonly EnvelopeItem[]): Ana
     confidence: 'LOW',
     recommendedAction: 'VERIFY',
     doNotSay: [`${MOCK_MARKER} Do not treat any part of this as analysis — no model produced it.`],
+    // Shaped, marked, and deliberately unusable as a post. `composeDrafts` still runs
+    // over this in MOCK mode — which is the point: the composer's sanitisation and
+    // limits are exercised without a key, and anything that reached the clipboard
+    // would carry the marker rather than looking like a real draft.
+    draftMaterial: {
+      hook: `${MOCK_MARKER} No hook — no model was called.`,
+      substance: `${MOCK_MARKER} No substance — AI_MODE=MOCK.`,
+      soWhat: `${MOCK_MARKER} Nothing follows from a placeholder.`,
+      testableClaim: '',
+    },
+    attentionDrivers: [],
+    attentionReason: `${MOCK_MARKER} Not assessed — no model was called.`,
+    mediaIdea: {
+      kind: 'none' as const,
+      whatToShow: '',
+      sourceHint: '',
+    },
     injectionObserved: false,
     injectionNote: '',
   };

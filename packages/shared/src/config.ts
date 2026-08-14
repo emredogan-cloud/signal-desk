@@ -39,6 +39,85 @@ const booleanish = z.preprocess((v) => {
   return v; // hand it to zod, which produces a readable "expected boolean" error
 }, z.boolean());
 
+/**
+ * The shapes X's key generator actually produces.
+ *
+ * ### Why a length check earns its place — 2026-08-14
+ *
+ * The first live run returned `401 Unauthorized`, which is the same body for a bad
+ * signature, a revoked token, an unenrolled app, and a mistyped key. Eliminating the
+ * signature took a published test vector; eliminating the app took an app-only bearer
+ * call that returned `403 Unsupported Authentication` (i.e. *authenticated*, wrong
+ * auth type for the endpoint). What was left was the credentials — and the access
+ * token turned out to carry a **30-character suffix where X issues 40**. It had been
+ * copied short, twice, into two different variable names.
+ *
+ * That cost six metered requests to discover something that is free to check. A
+ * 50-character access token is not a plausible token; it is a truncated one, and the
+ * only correct response is to refuse to send and say which field is wrong.
+ *
+ * Lengths are asserted, not the alphabet: X has changed the character set of these
+ * values before and a strict pattern would reject a valid future credential. Length is
+ * the part that catches the real failure — a partial paste — without guessing.
+ */
+export const X_CREDENTIAL_SHAPE = {
+  apiKey: 25,
+  apiSecret: 50,
+  /** `{user_id}-{40 chars}` — the suffix is the part that gets cut off. */
+  accessTokenSuffix: 40,
+  accessTokenSecret: 45,
+} as const;
+
+/** Human-readable problems with the credential *shapes*. Empty means "worth sending". */
+export function credentialShapeProblems(credentials: {
+  readonly apiKey: string | undefined;
+  readonly apiSecret: string | undefined;
+  readonly accessToken: string | undefined;
+  readonly accessTokenSecret: string | undefined;
+}): string[] {
+  const problems: string[] = [];
+
+  const check = (name: string, value: string, expected: number): void => {
+    if (value === '') problems.push(`${name} is empty`);
+    else if (value.length !== expected) {
+      problems.push(
+        `${name} is ${value.length} characters; X issues ${expected}` +
+          (value.length < expected ? ' — this looks like a partial paste' : ''),
+      );
+    }
+  };
+
+  check('X_API_KEY', credentials.apiKey ?? '', X_CREDENTIAL_SHAPE.apiKey);
+  check('X_API_SECRET', credentials.apiSecret ?? '', X_CREDENTIAL_SHAPE.apiSecret);
+  check(
+    'X_ACCESS_TOKEN_SECRET',
+    credentials.accessTokenSecret ?? '',
+    X_CREDENTIAL_SHAPE.accessTokenSecret,
+  );
+
+  const accessToken = credentials.accessToken ?? '';
+  const [userId, ...rest] = accessToken.split('-');
+  const suffix = rest.join('-');
+  if (accessToken === '') {
+    problems.push('X_ACCESS_TOKEN is empty');
+  } else if (rest.length === 0) {
+    problems.push('X_ACCESS_TOKEN has no "-" — the form is {user_id}-{40 characters}');
+  } else if (!/^\d+$/.test(userId ?? '')) {
+    problems.push('X_ACCESS_TOKEN does not start with a numeric user id');
+  } else if (suffix.length !== X_CREDENTIAL_SHAPE.accessTokenSuffix) {
+    problems.push(
+      `X_ACCESS_TOKEN's suffix is ${suffix.length} characters; X issues ` +
+        `${X_CREDENTIAL_SHAPE.accessTokenSuffix}` +
+        (suffix.length < X_CREDENTIAL_SHAPE.accessTokenSuffix
+          ? ' — the token was copied short. Regenerate it in the X developer console ' +
+            '(Keys and tokens → Access Token and Secret) and copy the whole value.'
+          : ''),
+    );
+  }
+
+  return problems;
+}
+
 export const configSchema = z.object({
   // ─── Mode ───────────────────────────────────────────────────────────
   DATA_MODE: withDefault(MODE, 'MOCK'),
@@ -201,6 +280,35 @@ export function deriveEffectiveModes(config: Config): EffectiveModes {
       effective: 'MOCK',
       because: `Missing X credentials: ${missingXKeys.join(', ')}. Outcome metrics come from fixtures.`,
     });
+  } else if (xMode === 'LIVE') {
+    /**
+     * Present is not the same as valid.
+     *
+     * Added 2026-08-14, from a live failure. All four X variables were set, so this
+     * function said LIVE, so the dashboard showed X as a working integration — and
+     * every request 401'd, because `X_ACCESS_TOKEN` had been copied ten characters
+     * short. "Four variables exist" was being treated as "the integration works".
+     *
+     * `ARCHITECTURE.md` §8 requires the badge to make degradation visible, and a badge
+     * that reads LIVE over an integration that cannot authenticate is the same false
+     * reassurance as a MOCK analysis rendered as real. Shape is checkable for free, so
+     * it is checked here rather than discovered by a metered request.
+     */
+    const shapeProblems = credentialShapeProblems({
+      apiKey: config.X_API_KEY,
+      apiSecret: config.X_API_SECRET,
+      accessToken: config.X_ACCESS_TOKEN,
+      accessTokenSecret: config.X_ACCESS_TOKEN_SECRET,
+    });
+    if (shapeProblems.length > 0) {
+      xMode = 'MOCK';
+      degradations.push({
+        subsystem: 'x',
+        requested: 'LIVE',
+        effective: 'MOCK',
+        because: `X credentials are present but malformed, so they cannot authenticate: ${shapeProblems.join('; ')}`,
+      });
+    }
   }
 
   // X_ENABLE_POSTING is necessary but never sufficient. THREAT-MODEL.md §T-4:

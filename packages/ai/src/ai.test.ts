@@ -57,6 +57,15 @@ const validAnalysis: Analysis = {
   confidence: 'HIGH',
   recommendedAction: 'POST_NOW',
   doNotSay: ['Do not say it is generally available.'],
+  draftMaterial: {
+    hook: 'The context window went from 128k to 1M tokens.',
+    substance: 'Available on the API today at the same price per token.',
+    soWhat: 'Work that needed chunking now fits in one call.',
+    testableClaim: '',
+  },
+  attentionDrivers: [],
+  attentionReason: '',
+  mediaIdea: { kind: 'none', whatToShow: '', sourceHint: '' },
   injectionObserved: false,
   injectionNote: '',
 };

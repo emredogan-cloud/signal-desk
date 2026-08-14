@@ -90,6 +90,52 @@ export type EventCategory = (typeof EVENT_CATEGORIES)[number];
 export const CONFIDENCE_LEVELS = ['LOW', 'MED', 'HIGH'] as const;
 export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
 
+/**
+ * Legitimate reasons a post earns unusual attention.
+ *
+ * Lives in `shared` because both ends need it: `packages/ai` constrains what the model
+ * may emit, and `packages/core` computes the verdict from what it emitted.
+ *
+ * A closed enum, deliberately. The operator asked the system to spot "viral potential",
+ * and the fastest way to build something that optimises for engagement rather than
+ * credibility is to let a model free-associate about what gets attention. Every member
+ * here is a property **of the event**, not a technique for provoking a reaction — there
+ * is no `controversy_bait`, no `hot_take`, no `outrage`. Adding one would be a change
+ * to what this product is for, not a new option.
+ */
+export const ATTENTION_DRIVERS = [
+  /** Genuinely new — not an iteration anyone expected. */
+  'novelty',
+  /** The result contradicts what a competent person would have predicted. */
+  'surprising_result',
+  /** Anyone can run it and see for themselves, today. */
+  'independently_testable',
+  /** A number, benchmark, or price that can be compared directly. */
+  'measurable_comparison',
+  /** It changes what a competitor has to do next. */
+  'competitive_implication',
+  /** The consequence lands on real work, not on discourse. */
+  'practical_consequence',
+  /** It shows better than it tells — there is something to see. */
+  'visually_demonstrable',
+  /** The before/after gap is large enough to be the whole story. */
+  'strong_before_after',
+  /** Being early is itself the advantage, and the window is open now. */
+  'timing_window',
+] as const;
+export type AttentionDriver = (typeof ATTENTION_DRIVERS)[number];
+
+/** What visual would turn a comment into evidence. `none` is a first-class answer. */
+export const MEDIA_KINDS = [
+  'none',
+  'screenshot',
+  'benchmark_run',
+  'comparison_chart',
+  'screen_recording',
+  'official_image',
+] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+
 export type Mode = 'MOCK' | 'LIVE';
 
 /**

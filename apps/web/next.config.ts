@@ -8,29 +8,19 @@ import type { NextConfig } from 'next';
  * already enforced by the `--hostname 127.0.0.1` flag in this package's scripts.
  */
 /**
- * Content-Security-Policy. `ROADMAP.md` Phase 10 / `THREAT-MODEL.md` §T-7.
+ * The Content-Security-Policy moved to `src/proxy.ts` on 2026-08-14.
  *
- * No `unsafe-inline`, no `unsafe-eval`, and `default-src 'none'` so anything not
- * explicitly allowed is denied rather than accidentally permitted. This is only
- * affordable because the dashboard is server-rendered with no client JavaScript —
- * a page that hydrated would need `script-src 'self'` and a nonce pipeline.
+ * It used to be a static header here. The rebuilt dashboard ships client JavaScript
+ * for the first time — copy-to-clipboard is the centre of the workflow — and React
+ * hydration streams its payload through inline `<script>` tags. A static
+ * `script-src 'self'` blocks those, silently, leaving a page that renders and never
+ * becomes interactive.
  *
- * `connect-src 'none'` matters more than it looks: even if hostile content somehow
- * reached execution, it would have nowhere to send what it found.
+ * The fix is a per-request nonce, and a nonce cannot live in a static config value by
+ * definition. `proxy.ts` mints one per request and sets the whole policy there, so
+ * there is exactly one place that decides it. The remaining headers below are static
+ * and stay here.
  */
-const CSP = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-  "base-uri 'none'",
-  "object-src 'none'",
-].join('; ');
-
 /**
  * The workspace packages are **runtime Node dependencies, not bundler input.**
  *
@@ -79,7 +69,8 @@ const nextConfig: NextConfig = {
       {
         source: '/:path*',
         headers: [
-          { key: 'Content-Security-Policy', value: CSP },
+          // Content-Security-Policy is NOT here — it carries a per-request nonce and
+          // is set in `src/proxy.ts`. See the note above.
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'no-referrer' },
           { key: 'X-Frame-Options', value: 'DENY' },

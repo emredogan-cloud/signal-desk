@@ -244,13 +244,56 @@ describe('deriveEffectiveModes', () => {
         AI_MODE: 'LIVE',
         X_MODE: 'LIVE',
         ANTHROPIC_API_KEY: 'sk-ant-api03-abcdefghijklmnop',
-        X_API_KEY: 'a',
-        X_API_SECRET: 'b',
-        X_ACCESS_TOKEN: 'c',
-        X_ACCESS_TOKEN_SECRET: 'd',
+        // Correctly SHAPED credentials. Single letters used to be enough here; since
+        // 2026-08-14 `deriveEffectiveModes` also checks that the values could possibly
+        // authenticate, so the fixture has to look like a real key or the assertion is
+        // testing the degradation path by accident.
+        X_API_KEY: 'k'.repeat(25),
+        X_API_SECRET: 's'.repeat(50),
+        X_ACCESS_TOKEN: `1749077286295326720-${'t'.repeat(40)}`,
+        X_ACCESS_TOKEN_SECRET: 'x'.repeat(45),
       }),
     );
     expect(isAnyModeMocked(allLive)).toBe(false);
+  });
+
+  it('degrades X to MOCK when the credentials are present but malformed', () => {
+    /**
+     * The live failure this encodes, 2026-08-14: all four X variables were set, so the
+     * system reported LIVE, so the dashboard showed a working integration — and every
+     * request 401'd, because the access token had been copied ten characters short.
+     * "Four variables exist" was standing in for "the integration works".
+     */
+    const modes = deriveEffectiveModes(
+      parseConfig({
+        X_MODE: 'LIVE',
+        X_API_KEY: 'k'.repeat(25),
+        X_API_SECRET: 's'.repeat(50),
+        // 30-character suffix where X issues 40 — the real defect, exactly.
+        X_ACCESS_TOKEN: `1749077286295326720-${'t'.repeat(30)}`,
+        X_ACCESS_TOKEN_SECRET: 'x'.repeat(45),
+      }),
+    );
+
+    expect(modes.xMode).toBe('MOCK');
+    const reason = modes.degradations.find((entry) => entry.subsystem === 'x')?.because ?? '';
+    expect(reason).toContain('malformed');
+    // The reason has to name the field and the fix, not merely report failure.
+    expect(reason).toContain('X_ACCESS_TOKEN');
+    expect(reason).toContain('30 characters');
+  });
+
+  it('does not degrade X when every credential is correctly shaped', () => {
+    const modes = deriveEffectiveModes(
+      parseConfig({
+        X_MODE: 'LIVE',
+        X_API_KEY: 'k'.repeat(25),
+        X_API_SECRET: 's'.repeat(50),
+        X_ACCESS_TOKEN: `1749077286295326720-${'t'.repeat(40)}`,
+        X_ACCESS_TOKEN_SECRET: 'x'.repeat(45),
+      }),
+    );
+    expect(modes.xMode).toBe('LIVE');
   });
 });
 

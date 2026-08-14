@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { ConfidenceLevel } from '@signal-desk/shared';
 import type { Db } from '../client.js';
 import { analyses, events, eventScores, spendLedger } from '../schema.js';
@@ -285,6 +285,72 @@ export function clearAnalyses(db: Db): void {
  * DON'T POST reasons — `insufficient_information` and `reputational_risk` — can
  * actually fire, and the decision panel can show real traps rather than an empty list.
  */
+/**
+ * The analysis context for many events at once.
+ *
+ * ### The defect this exists to fix — 2026-08-14
+ *
+ * The dashboard showed **two different recommendations for the same event**: the list
+ * card said POST_SOON and the detail panel said DONT_POST, three centimetres apart.
+ *
+ * They were not disagreeing by design. `buildStrategy` is one function and both callers
+ * used it — but the list called it with `stillUnknown: []` and `doNotSay: []`, because
+ * reading each event's analysis meant a query per row and the list had forty rows. The
+ * detail panel passed the real values, the forcing rule saw ten open questions, and it
+ * escalated. **The list was not showing a different opinion; it was showing an opinion
+ * formed with less information than the system already had**, which is worse, because
+ * the list is what the operator scans.
+ *
+ * PROJECT-MEMORY records the same shape from Phase 11 — "one judgement, three
+ * derivations" — where `strategyFromScore` had been reimplemented in three callers and
+ * the third had drifted. That was a duplicated *function*. This was a duplicated
+ * *input set*, which is harder to see and produces the same class of wrong.
+ *
+ * One query for the whole page, so the cheap path and the expensive path can be given
+ * identical inputs and there is no incentive to cut the corner again.
+ */
+export function analysisContextFor(
+  db: Db,
+  eventIds: readonly number[],
+): Map<number, { stillUnknown: string[]; doNotSay: string[]; injectionObserved: boolean }> {
+  const out = new Map<
+    number,
+    { stillUnknown: string[]; doNotSay: string[]; injectionObserved: boolean }
+  >();
+  if (eventIds.length === 0) return out;
+
+  const rows = db
+    .select({
+      eventId: analyses.eventId,
+      id: analyses.id,
+      payload: analyses.payload,
+      injectionObserved: analyses.injectionObserved,
+    })
+    .from(analyses)
+    .where(
+      and(
+        inArray(analyses.eventId, [...eventIds]),
+        eq(analyses.stage, 'analysis'),
+        eq(analyses.status, 'ok'),
+      ),
+    )
+    .orderBy(analyses.id)
+    .all();
+
+  // Ascending id, so a later row for the same event overwrites an earlier one and the
+  // map ends up holding the most recent analysis per event.
+  for (const row of rows) {
+    const payload = row.payload as { stillUnknown?: string[]; doNotSay?: string[] } | null;
+    out.set(row.eventId, {
+      stillUnknown: payload?.stillUnknown ?? [],
+      doNotSay: payload?.doNotSay ?? [],
+      injectionObserved: row.injectionObserved,
+    });
+  }
+
+  return out;
+}
+
 export function latestAnalysisFor(
   db: Db,
   eventId: number,
@@ -294,6 +360,17 @@ export function latestAnalysisFor(
       doNotSay: string[];
       confidence: string | null;
       injectionObserved: boolean;
+      /**
+       * The whole stored analysis, unnarrowed.
+       *
+       * Added 2026-08-14 for the rebuilt dashboard, which renders what/changed,
+       * before/after, implications, claims, draft material, attention drivers and the
+       * media idea — all of which were already being written to this column and none
+       * of which anything read. Typed as `unknown` on purpose: this row was produced
+       * by a model that had read untrusted content, and the reader is responsible for
+       * validating the shape it uses rather than trusting a cast made here.
+       */
+      payload: unknown;
     }
   | undefined {
   const row = db
@@ -318,5 +395,6 @@ export function latestAnalysisFor(
     doNotSay: payload?.doNotSay ?? [],
     confidence: row.confidence,
     injectionObserved: row.injectionObserved,
+    payload: row.payload,
   };
 }

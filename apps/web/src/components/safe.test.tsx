@@ -109,16 +109,16 @@ describe('the MOCK badge', () => {
     const html = renderToStaticMarkup(
       <MockBadge modes={{ ...base, dataMode: 'MOCK', aiMode: 'MOCK', xMode: 'LIVE' }} />,
     );
-    expect(html).toContain('DATA');
+    expect(html).toContain('VERİ');
     expect(html).toContain('AI');
-    expect(html).not.toContain('X (no platform access)');
+    expect(html).not.toContain('platform erişimi yok');
   });
 
   it('states plainly that nothing on screen is live', () => {
     const html = renderToStaticMarkup(
       <MockBadge modes={{ ...base, dataMode: 'MOCK', aiMode: 'MOCK', xMode: 'MOCK' }} />,
     );
-    expect(html).toContain('Nothing on this screen is a live result');
+    expect(html).toContain('canlı sonuç değildir');
   });
 
   it('renders nothing when everything is live', () => {
@@ -137,7 +137,7 @@ describe('the MOCK badge', () => {
         xMode: 'LIVE' as const,
         [mocked]: 'MOCK' as const,
       };
-      expect(renderToStaticMarkup(<MockBadge modes={modes} />), mocked).toContain('MOCK MODE');
+      expect(renderToStaticMarkup(<MockBadge modes={modes} />), mocked).toContain('MOCK MOD');
     }
   });
 });

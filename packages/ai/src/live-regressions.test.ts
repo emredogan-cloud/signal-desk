@@ -34,6 +34,15 @@ function analysis(overrides: Partial<Analysis> = {}): Analysis {
     confidence: 'HIGH',
     recommendedAction: 'POST_NOW',
     doNotSay: [],
+    draftMaterial: {
+      hook: 'The context window went from 128k to 1M tokens.',
+      substance: 'Available on the API today at the same price per token.',
+      soWhat: 'Work that needed chunking now fits in one call.',
+      testableClaim: '',
+    },
+    attentionDrivers: [],
+    attentionReason: '',
+    mediaIdea: { kind: 'none', whatToShow: '', sourceHint: '' },
     injectionObserved: false,
     // Required by the schema. Omitting it made two of these regressions fail with
     // "did not match the schema" — TypeScript could not catch it, because spreading a
