@@ -163,6 +163,53 @@ const LABELS: Record<MediaKind, string> = {
 };
 
 /**
+ * A copy-ready prompt for an image generator, or nothing.
+ *
+ * ## Why this is generated in code rather than by the model
+ *
+ * The failure mode of an AI-written image prompt is that it invents: a logo that does
+ * not exist, a benchmark bar at a height nobody measured, a UI that was never shipped.
+ * The operator would then post a picture asserting something false, which is a worse
+ * outcome than posting no picture — and unlike a wrong sentence, a wrong chart is not
+ * obviously wrong to a reader.
+ *
+ * So the prompt is assembled from **fields that already passed validation**, and it
+ * carries explicit negative constraints. It never asks for a brand mark, never asks for
+ * a number the analysis did not establish, and never asks for a screenshot of a real
+ * product — those are things to capture, not to generate.
+ *
+ * Returns `undefined` when an image would not help. A generated illustration attached
+ * to a technical post is decoration, and decoration on a credibility play is a cost.
+ */
+function imagePromptFor(input: MediaInput): string | undefined {
+  const hasComparison = input.before.trim() !== '' && input.after.trim() !== '';
+
+  // Only two cases genuinely benefit from a generated image. Everything else is better
+  // served by a screenshot of the real thing, which is evidence rather than art.
+  if (!hasComparison && input.kind !== 'comparison_chart') return undefined;
+
+  const before = input.before.trim().slice(0, 90);
+  const after = input.after.trim().slice(0, 90);
+
+  return [
+    'A clean, editorial-style technical diagram for a developer audience.',
+    hasComparison
+      ? `Two labelled panels side by side comparing a before and after state. Left panel labelled "BEFORE": ${before}. Right panel labelled "AFTER": ${after}.`
+      : 'A single labelled panel stating one technical comparison.',
+    'Style: dark background (#0b0d12), one restrained accent colour, thin geometric lines, generous negative space, no gradients, no glow, no 3D.',
+    'Typography: one clean sans-serif, high contrast, large enough to read on a phone.',
+    'Aspect ratio 16:9, suitable for an X post.',
+    '',
+    'Hard constraints — the image must NOT contain:',
+    '- any company logo, wordmark, or brand identity of any kind',
+    '- any number, percentage, or benchmark figure that is not written above',
+    '- any fake user interface, fake screenshot, or fake product photograph',
+    '- any human face, any stock-photo styling, any decorative illustration',
+    '- any text other than the labels given above',
+  ].join('\n');
+}
+
+/**
  * Build the plan for the media the analysis suggested.
  *
  * Returns `undefined` for `none`, and `none` is the common case. A dashboard that
@@ -188,10 +235,10 @@ export function planMedia(input: MediaInput): MediaPlan | undefined {
   const base = {
     kind: input.kind,
     label: LABELS[input.kind],
-    whatToShow: what === '' ? 'The specific claim being made, on screen.' : what,
+    whatToShow: what === '' ? 'Ekranda tam olarak hangi iddianın göründüğü.' : what,
     source,
     video: undefined,
-    imagePrompt: undefined,
+    imagePrompt: imagePromptFor(input),
   };
 
   switch (input.kind) {
@@ -240,7 +287,7 @@ export function planMedia(input: MediaInput): MediaPlan | undefined {
           'Put the source under the chart, in the image.',
         ],
         tool: 'A spreadsheet, or plain SVG. Resist anything heavier.',
-        imagePrompt: undefined,
+        imagePrompt: imagePromptFor(input),
       };
 
     case 'screen_recording': {

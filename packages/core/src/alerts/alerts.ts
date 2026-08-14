@@ -42,6 +42,14 @@ export type Alert = {
   /** Stable across re-runs of the same underlying fact. The dedup key. */
   readonly dedupeKey: string;
   readonly eventId: number | undefined;
+  /**
+   * Where tapping the notification lands.
+   *
+   * A phone alert that says "something happened" and drops the operator on a list is
+   * an alert that costs him the thirty seconds it was supposed to save. The whole
+   * point of interrupting is that the decision is already assembled on the other side.
+   */
+  readonly clickUrl: string | undefined;
 };
 
 export type AlertDecision = {
@@ -185,6 +193,10 @@ export function freshnessAlerts(sources: readonly SourceFreshness[]): Alert[] {
         body: `Priority ${String(source.priority)}. ${String(source.consecutiveFailures)} consecutive failures. This source has produced nothing since it was configured — it is not quiet, it is broken.`,
         dedupeKey: dedupeKey('urgent', `never-succeeded:${source.sourceId}`),
         eventId: undefined,
+        // A dead source is not an event, so there is nothing to deep-link to. Stated
+        // explicitly rather than omitted: the field is required precisely so that
+        // "no link" is a decision someone made, not one the type system let slide.
+        clickUrl: undefined,
       });
       continue;
     }
@@ -198,6 +210,7 @@ export function freshnessAlerts(sources: readonly SourceFreshness[]): Alert[] {
         body: `Priority ${String(source.priority)} threshold is ${String(threshold)}h. ${String(source.consecutiveFailures)} consecutive failures. Detection through this source has stopped.`,
         dedupeKey: dedupeKey('urgent', `stale:${source.sourceId}`),
         eventId: undefined,
+        clickUrl: undefined,
       });
     }
   }
@@ -217,7 +230,26 @@ export type EventAlertInput = {
   readonly recommendedAction: string;
   readonly manualFlag: boolean;
   readonly category: string;
+  /** Minutes since the event occurred. The operator's first question is "how fresh". */
+  readonly ageMinutes: number;
+  /** One sentence of why, from the strategy engine. */
+  readonly whyNow: string;
+  /** Dashboard origin, for the deep link. Empty disables the link. */
+  readonly baseUrl: string;
 };
+
+/** "2 dakika önce" / "3 saat önce" — the alert is read on a phone, in Turkish. */
+function agePhrase(minutes: number): string {
+  if (minutes < 1) return 'az önce';
+  if (minutes < 60) return `${String(Math.round(minutes))} dakika önce`;
+  if (minutes < 48 * 60) return `${String(Math.round(minutes / 60))} saat önce`;
+  return `${String(Math.round(minutes / 1440))} gün önce`;
+}
+
+function link(baseUrl: string, eventId: number): string | undefined {
+  if (baseUrl.trim() === '') return undefined;
+  return `${baseUrl.replace(/\/$/, '')}/?event=${String(eventId)}`;
+}
 
 /**
  * Turn an event into an alert, or nothing.
@@ -234,20 +266,28 @@ export function eventAlert(input: EventAlertInput): Alert | undefined {
   if (input.manualFlag) {
     return {
       tier: 'urgent',
-      title: `Needs human review: ${input.title.slice(0, 80)}`,
-      body: 'Forced to VERIFY and flagged. An unverified accusation amplified damages a third party who had no say in it.',
+      title: `⚠️ İNSAN KONTROLÜ: ${input.title.slice(0, 70)}`,
+      body:
+        `${agePhrase(input.ageMinutes)} · güven ${input.confidence}\n` +
+        'VERIFY olarak işaretlendi. Doğrulanmamış bir iddiayı büyütmek, söz hakkı olmayan bir üçüncü tarafa zarar verir.\n' +
+        'Paylaşmadan önce aç ve oku.',
       dedupeKey: dedupeKey('urgent', `manual-flag:${String(input.eventId)}`),
       eventId: input.eventId,
+      clickUrl: link(input.baseUrl, input.eventId),
     };
   }
 
   if (input.recommendedAction === 'POST_NOW') {
     return {
       tier: 'urgent',
-      title: `POST NOW: ${input.title.slice(0, 80)}`,
-      body: `Combined ${String(input.combined)}, confidence ${input.confidence}. Inside the early window — the recommendation decays with time.`,
+      title: `🔴 ŞİMDİ PAYLAŞ: ${input.title.slice(0, 70)}`,
+      body:
+        `${agePhrase(input.ageMinutes)} · ${input.category} · skor ${String(input.combined)} · güven ${input.confidence}\n` +
+        `${input.whyNow.slice(0, 180)}\n` +
+        'Taslak hazır — aç, oku, kopyala.',
       dedupeKey: dedupeKey('urgent', `post-now:${String(input.eventId)}`),
       eventId: input.eventId,
+      clickUrl: link(input.baseUrl, input.eventId),
     };
   }
 

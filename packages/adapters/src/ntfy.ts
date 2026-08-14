@@ -69,6 +69,9 @@ export async function deliver(
         Title: alert.title,
         Priority: TIER_PRIORITY[alert.tier],
         Tags: alert.tier,
+        // Tapping the notification opens the event, not the dashboard root. ntfy
+        // honours `Click` on Android and in the web app.
+        ...(alert.clickUrl !== undefined ? { Click: alert.clickUrl } : {}),
       },
       signal: AbortSignal.timeout(10_000),
     });

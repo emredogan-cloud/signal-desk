@@ -94,7 +94,7 @@ const MANAGED: Managed[] = [
  * ($2/day) and the rule gate, which measured at a 98.7% kill rate. The one full pass
  * over 65 gate survivors cost $0.70. This is not an unmetered loop.
  */
-const PIPELINE_STAGES = ['cluster', 'score', 'analyze'] as const;
+const PIPELINE_STAGES = ['cluster', 'score', 'analyze', 'alerts'] as const;
 
 /** How often the pipeline runs. Ingestion polls far more often; events are slower. */
 const PIPELINE_INTERVAL_MS =
@@ -103,7 +103,29 @@ const PIPELINE_INTERVAL_MS =
 /** Delay before the first run, so ingestion has something for it to work on. */
 const PIPELINE_FIRST_RUN_MS = 3 * 60_000;
 
+/**
+ * The fast path. **How often we ask "did something important just land?"**
+ *
+ * MEASURED, 2026-08-14: steady-state detection is p50 36 minutes but 0.5–6 minutes for
+ * the GitHub-release and status-page sources that carry the announcements worth acting
+ * on. The pipeline then adds **up to another 20 minutes** because it runs on a fixed
+ * cycle — measured p50 6.7 min, p90 14.5 min, max 17.5 min from first-seen to first
+ * score. So on a Tier-1 announcement the fixed cycle, not detection, is the dominant
+ * term in time-to-action.
+ *
+ * A shorter cycle is the wrong fix: a full pass costs 413 seconds of CPU on this
+ * machine, so running it every five minutes would leave the box permanently busy and
+ * starve the dashboard — which is exactly the 32-second page load already fixed once.
+ *
+ * Instead the supervisor asks a **cheap indexed question** every minute: has any
+ * Priority-1 source produced a new raw item since the last pipeline run? If yes, run
+ * now. Nothing happens on a quiet minute, and an Anthropic or OpenAI announcement no
+ * longer waits out the remainder of a cycle it just missed.
+ */
+const FAST_PATH_CHECK_MS = 60_000;
+
 let pipelineRunning = false;
+let lastPipelineStartedAt = Math.floor(Date.now() / 1000);
 
 function runPipelineStage(stage: string): Promise<number> {
   return new Promise((resolve) => {
@@ -121,10 +143,42 @@ function runPipelineStage(stage: string): Promise<number> {
   });
 }
 
-async function runPipeline(): Promise<void> {
+/**
+ * Has a Tier-1 source published since the last pipeline run?
+ *
+ * Read-only, one indexed query, no ORM — the supervisor deliberately owns no database
+ * dependency beyond this. It opens read-only so it can never contend with the worker
+ * for the write lock (the mistake that cost 32 seconds a page once already).
+ */
+async function tierOneArrivals(): Promise<number> {
+  try {
+    const { openDatabase } = await import('@signal-desk/db');
+    const url = process.env.DATABASE_URL ?? 'file:/data/signal-desk.db';
+    const handle = openDatabase({ url, readonly: true });
+    try {
+      const row = handle.raw
+        .prepare(
+          `select count(*) as n from raw_items ri
+             join sources s on s.id = ri.source_id
+            where s.priority = 1 and ri.fetched_at > ?`,
+        )
+        .get(lastPipelineStartedAt) as { n: number } | undefined;
+      return row?.n ?? 0;
+    } finally {
+      handle.close();
+    }
+  } catch {
+    // A failed check must never stop the scheduled cycle from running.
+    return 0;
+  }
+}
+
+async function runPipeline(trigger: 'scheduled' | 'fast-path'): Promise<void> {
   if (pipelineRunning || shuttingDown) return;
   pipelineRunning = true;
+  lastPipelineStartedAt = Math.floor(Date.now() / 1000);
   const started = Date.now();
+  if (trigger === 'fast-path') log('fast path: Tier-1 source published — running the pipeline now');
 
   try {
     for (const stage of PIPELINE_STAGES) {
@@ -135,7 +189,7 @@ async function runPipeline(): Promise<void> {
       }
       if (shuttingDown) return;
     }
-    log(`pipeline complete in ${Math.round((Date.now() - started) / 1000)}s`);
+    log(`pipeline complete in ${Math.round((Date.now() - started) / 1000)}s (${trigger})`);
   } finally {
     pipelineRunning = false;
   }
@@ -228,14 +282,23 @@ for (const managed of MANAGED) start(managed);
 
 // Ingestion is already running by the time the first pipeline cycle fires.
 setTimeout(() => {
-  void runPipeline();
+  void runPipeline('scheduled');
   setInterval(() => {
-    void runPipeline();
+    void runPipeline('scheduled');
   }, PIPELINE_INTERVAL_MS).unref();
+
+  // The fast path, checked every minute and almost always a no-op.
+  setInterval(() => {
+    if (pipelineRunning || shuttingDown) return;
+    void tierOneArrivals().then((n) => {
+      if (n > 0) void runPipeline('fast-path');
+    });
+  }, FAST_PATH_CHECK_MS).unref();
 }, PIPELINE_FIRST_RUN_MS).unref();
 
 log(
-  `pipeline scheduled: ${PIPELINE_STAGES.join(' → ')} every ` +
-    `${Math.round(PIPELINE_INTERVAL_MS / 60_000)} minutes, first run in ` +
-    `${Math.round(PIPELINE_FIRST_RUN_MS / 60_000)} minutes`,
+  `pipeline: ${PIPELINE_STAGES.join(' → ')} every ` +
+    `${Math.round(PIPELINE_INTERVAL_MS / 60_000)}min, first run in ` +
+    `${Math.round(PIPELINE_FIRST_RUN_MS / 60_000)}min; fast path checks Tier-1 every ` +
+    `${Math.round(FAST_PATH_CHECK_MS / 1000)}s`,
 );

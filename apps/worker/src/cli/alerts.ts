@@ -89,6 +89,11 @@ async function main(): Promise<number> {
           recommendedAction: strategy.recommendation.action,
           manualFlag: strategy.recommendation.manualFlag,
           category: row.category,
+          ageMinutes: Math.max(0, (now.getTime() - row.eventOccurredAt.getTime()) / 60_000),
+          whyNow: strategy.panel.whyNow,
+          // The deep link. Without it the notification costs the operator the thirty
+          // seconds it exists to save: he taps, lands on a list, and hunts.
+          baseUrl: process.env.SIGNAL_DESK_URL ?? 'https://signal-desk.fly.dev',
         });
       })
       .filter((alert): alert is Alert => alert !== undefined);

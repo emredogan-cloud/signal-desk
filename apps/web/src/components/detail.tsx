@@ -342,6 +342,22 @@ export function Detail({ brief, now }: { readonly brief: Brief; readonly now: Da
                 <div className="media-v">{brief.media.tool}</div>
               </div>
 
+              {brief.media.imagePrompt !== undefined ? (
+                <div className="media-field">
+                  <div className="media-k">GPT IMAGE PROMPT</div>
+                  <pre className="draft-text" style={{ padding: '9px 0 0' }}>
+                    {brief.media.imagePrompt}
+                  </pre>
+                  <div style={{ marginTop: 6 }}>
+                    <CopyButton
+                      text={brief.media.imagePrompt}
+                      label="Prompt'u kopyala"
+                      doneLabel="Kopyalandı ✓"
+                    />
+                  </div>
+                </div>
+              ) : null}
+
               {brief.media.video !== undefined ? (
                 <>
                   <div className="media-field">

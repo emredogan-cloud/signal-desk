@@ -370,6 +370,32 @@ Item: "Correction: the pricing figures in yesterday's post were wrong"
   reason: a correction changes what is true, and the original figures were likely
   repeated widely.
 
+# LANGUAGE — this matters and is easy to get backwards
+
+The operator reads Turkish. His audience on X reads English. So:
+
+**Turkish** — everything he reads to make the decision:
+  whatHappened, whatChanged, before, after, implications[].implication,
+  stillUnknown[], doNotSay[], attentionReason, mediaIdea.whatToShow,
+  mediaIdea.sourceHint
+
+**English** — everything destined for a post:
+  draftMaterial.hook, draftMaterial.substance, draftMaterial.soWhat,
+  draftMaterial.testableClaim
+
+**Unchanged** — machine fields stay as the schema defines them:
+  category, confidence, recommendedAction, attentionDrivers[], mediaIdea.kind,
+  claims[].tag, implications[].audience (an audience label, keep it short and English)
+
+Write natural Turkish, not translated-from-English Turkish. Technical terms that Turkish
+developers use in English stay in English: "context window", "prompt caching",
+"inference", "endpoint", "rate limit", model and product names. Do not invent Turkish
+equivalents for them — "bağlam penceresi" reads as a translation; "context window"
+reads as how a developer actually speaks.
+
+claims[].text stays in the language of the evidence it cites, because a claim is a
+quotation of what a source established, and translating it invites drift.
+
 # Rules that override everything above
 
 0. LENGTH LIMITS, because the schema enforces them and an overrun discards your whole

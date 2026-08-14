@@ -39,6 +39,7 @@ const alert = (tier: Alert['tier'], fact = 'a fact'): Alert => ({
   tier,
   title: 'Title',
   body: 'Body',
+  clickUrl: undefined,
   dedupeKey: dedupeKey(tier, fact),
   eventId: 1,
 });
@@ -215,6 +216,9 @@ describe('event alerts', () => {
     recommendedAction: 'POST_NOW',
     manualFlag: false,
     category: 'ai',
+    ageMinutes: 12,
+    whyNow: 'İlk dalga henüz oluşuyor.',
+    baseUrl: 'https://signal-desk.fly.dev',
   };
 
   it('alerts on POST_NOW', () => {
@@ -238,7 +242,7 @@ describe('event alerts', () => {
     // unrecoverable — the interruption buys a human decision before anything happens.
     const flagged = eventAlert({ ...base, recommendedAction: 'VERIFY', manualFlag: true });
     expect(flagged?.tier).toBe('urgent');
-    expect(flagged?.title).toContain('human review');
+    expect(flagged?.title).toContain('İNSAN KONTROLÜ');
   });
 
   it('alerts at most once per event', () => {
@@ -255,31 +259,49 @@ describe('a realistic day stays quiet', () => {
       {
         ...{ eventId: 1, title: 'a', combined: 80, confidence: 'HIGH', category: 'ai' },
         recommendedAction: 'POST_NOW',
+        ageMinutes: 12,
+        whyNow: 'İlk dalga henüz oluşuyor.',
+        baseUrl: 'https://signal-desk.fly.dev',
         manualFlag: false,
       },
       {
         ...{ eventId: 2, title: 'b', combined: 60, confidence: 'MED', category: 'ai' },
         recommendedAction: 'POST_SOON',
+        ageMinutes: 300,
+        whyNow: '',
+        baseUrl: 'https://signal-desk.fly.dev',
         manualFlag: false,
       },
       {
         ...{ eventId: 3, title: 'c', combined: 50, confidence: 'LOW', category: 'ai' },
         recommendedAction: 'WAIT',
+        ageMinutes: 90,
+        whyNow: '',
+        baseUrl: 'https://signal-desk.fly.dev',
         manualFlag: false,
       },
       {
         ...{ eventId: 4, title: 'd', combined: 40, confidence: 'LOW', category: 'ai' },
         recommendedAction: 'DONT_POST',
+        ageMinutes: 500,
+        whyNow: '',
+        baseUrl: 'https://signal-desk.fly.dev',
         manualFlag: false,
       },
       {
         ...{ eventId: 5, title: 'e', combined: 55, confidence: 'MED', category: 'ai' },
         recommendedAction: 'POST_SOON',
+        ageMinutes: 300,
+        whyNow: '',
+        baseUrl: 'https://signal-desk.fly.dev',
         manualFlag: false,
       },
       {
         ...{ eventId: 6, title: 'f', combined: 70, confidence: 'MED', category: 'ai' },
         recommendedAction: 'VERIFY',
+        ageMinutes: 45,
+        whyNow: '',
+        baseUrl: 'https://signal-desk.fly.dev',
         manualFlag: true,
       },
     ];
