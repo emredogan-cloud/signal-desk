@@ -2,6 +2,12 @@
 .env
 .env.local
 .env.*.local
+# A hand-made backup is the realistic way a real key reaches a commit: `.env` is
+# ignored, `.env.bak` was not. Added 2026-08-14 after making exactly such a backup.
+.env.bak
+.env.backup*
+.env.save
+!.env.example
 *.pem
 *.key
 

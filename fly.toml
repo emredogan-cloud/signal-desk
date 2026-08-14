@@ -1,0 +1,78 @@
+# signal-desk — one machine, one volume, one process tree.
+#
+# Provider chosen 2026-08-14. The decision and the alternatives it beat are recorded in
+# `docs/ARCHITECTURE.md` §12; the short version is that this architecture needs a
+# **persistent filesystem shared by exactly one writer and one reader**, which rules
+# out every serverless option including the one this project was asked to deploy to.
+
+app = 'signal-desk'
+primary_region = 'fra'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  # Absolute, so it does not depend on the process's working directory. The volume is
+  # mounted here; the repository's relative `file:./data/...` default would land on the
+  # container's ephemeral layer and be discarded on every deploy.
+  DATABASE_URL = 'file:/data/signal-desk.db'
+  DATA_MODE = 'LIVE'
+  AI_MODE = 'LIVE'
+  # MOCK until X_ACCESS_TOKEN is re-copied at full length — see ENV-HANDBOOK §4a.
+  # LIVE here would put a badge on the dashboard claiming an integration that 401s.
+  X_MODE = 'MOCK'
+  X_ENABLE_POSTING = 'false'
+  LOG_LEVEL = 'info'
+  TZ = 'Europe/Istanbul'
+  AI_ANALYSIS_THRESHOLD = '50'
+  AI_DAILY_BUDGET_USD = '2.00'
+  X_DAILY_BUDGET_USD = '1.50'
+  PORT = '3000'
+  # On the volume, not in the image. See packages/shared/src/repo-root.ts.
+  MODEL_CACHE_DIR = '/data/.models'
+
+# The database. `raw_items` is append-only and replayable, and Phase 12's offline
+# refit exists only because those rows were kept — losing this volume costs the
+# accumulated history, not just today's cache.
+[[mounts]]
+  source = 'signal_desk_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # This is a 24/7 detector, not a request-driven app. Auto-stop would suspend the
+  # scheduler between HTTP requests — which is precisely the "if the machine is off,
+  # nothing is detected" failure this deployment exists to end.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '60s'
+    method = 'GET'
+    path = '/healthz'
+
+[[vm]]
+  # MEASURED, 2026-08-14, not chosen from a table.
+  #
+  # Started at shared-cpu-1x / 1GB. Both were wrong, and they failed differently:
+  #
+  #   CPU — clustering 5,198 backlogged items runs local ONNX inference, and
+  #   shared-cpu-1x's *sustained* share is roughly a tenth of a core once the burst
+  #   balance is spent. Measured at 8% of one core; the backlog would have taken
+  #   hours. Note this is a one-time cost: steady state is tens of new items per
+  #   20-minute cycle, not five thousand.
+  #
+  #   Memory — at 1GB the machine became **completely unresponsive** under clustering.
+  #   Not slow: the health check, SSH, and the public URL all timed out together while
+  #   the machine still reported `started`. The embedder's ~440MB resident alongside
+  #   Next.js (~72MB), the worker (~96MB), and page cache does not fit.
+  #
+  # 2GB and shared-cpu-2x recovered it immediately and is the honest floor. Scaling
+  # DOWN is a measurement, not a guess: watch `/proc/meminfo` during a cluster cycle
+  # before trying 1GB again.
+  size = 'shared-cpu-2x'
+  memory = '2gb'

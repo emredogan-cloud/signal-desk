@@ -1,0 +1,1 @@
+ALTER TABLE `spend_ledger` ADD `provider` text DEFAULT 'anthropic' NOT NULL;

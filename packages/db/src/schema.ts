@@ -623,6 +623,17 @@ export const spendLedger = sqliteTable(
   'spend_ledger',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    /**
+     * Which metered vendor this row is spend against — `anthropic` or `x`.
+     *
+     * Added 2026-08-14 with the first real X call. The two budgets are separate by
+     * design (ENV-HANDBOOK §4: X is per-request with no plan cap to bump into), so a
+     * single summed ledger would let an X owned-read suspend deep analysis, and a busy
+     * analysis day would silently consume the X allowance. `spendSince` therefore
+     * takes a provider and defaults to `anthropic`, which is what every pre-existing
+     * row is — hence the default rather than a backfill.
+     */
+    provider: text('provider').notNull().default('anthropic'),
     stage: text('stage').notNull(),
     model: text('model').notNull(),
     inputTokens: integer('input_tokens').notNull().default(0),

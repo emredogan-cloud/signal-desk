@@ -142,6 +142,41 @@ make monitoring cost roughly $150/month.
 - **If missing:** the analytics loop runs against fixture data and the dashboard marks outcome
   metrics as MOCK.
 
+### 4a. X credential shapes — check these before spending anything
+
+Added 2026-08-14, after a `401 Unauthorized` cost six metered requests to diagnose.
+`401` is the same body for a bad signature, a revoked token, an unenrolled app, and a
+**mistyped key**, so eliminate the free possibilities first. `pnpm x:verify` now does
+this automatically and refuses to send when a shape is wrong.
+
+| Variable                | Length X issues                     |
+| ----------------------- | ----------------------------------- |
+| `X_API_KEY`             | 25 characters                       |
+| `X_API_SECRET`          | 50 characters                       |
+| `X_ACCESS_TOKEN`        | `{numeric user id}-{40 characters}` |
+| `X_ACCESS_TOKEN_SECRET` | 45 characters                       |
+
+**What went wrong here, recorded so it is not rediscovered:** three of the four were
+correct. `X_ACCESS_TOKEN` carried a **30-character suffix** — copied short from the
+developer console, and short in _both_ credential sets that had been pasted into
+`.env`. Everything downstream was correct: the OAuth 1.0a implementation reproduces
+X's own published signature vector byte for byte, and the app itself authenticates
+(an app-only bearer token returns `403 Unsupported Authentication`, which means
+_recognised_, wrong auth type for that endpoint).
+
+**To fix:** X developer console → your app → _Keys and tokens_ → **Access Token and
+Secret** → Regenerate. Copy the whole value. Then:
+
+```bash
+pnpm x:verify          # refuses for free if a shape is still wrong
+```
+
+When it prints the account, set `X_MODE=LIVE` in `.env` _and_ in `fly.toml`, and
+redeploy. Until then `X_MODE=MOCK` is the honest setting — `LIVE` would put a badge on
+the dashboard claiming an integration that 401s.
+
+---
+
 ### `X_MODE`
 
 - **Values:** `MOCK` | `LIVE` — **Default:** `MOCK`
@@ -169,6 +204,37 @@ make monitoring cost roughly $150/month.
 - **Default:** `4`
 - **Purpose:** a hard self-limit well under any platform ceiling. Also a content-quality guard —
   posting frequency past a handful per day works against the operator, not for him.
+
+---
+
+## 4b. Dashboard access — required from the day it is deployed
+
+### `DASHBOARD_USER`, `DASHBOARD_PASSWORD`
+
+- **Purpose:** the single-operator credential checked by `apps/web/src/proxy.ts`.
+- **Values:** `DASHBOARD_USER` defaults to `operator`; `DASHBOARD_PASSWORD` has no
+  default and no fallback.
+- **Required:** whenever the dashboard is reachable from anywhere but `127.0.0.1`.
+  `ARCHITECTURE.md` §11 always said auth arrives "the day it is deployed remotely";
+  that day was 2026-08-14.
+- **If missing:** **every request is refused.** The proxy fails closed. An unset
+  password degrades to "nobody can read the dashboard", never to "anybody can".
+- **Where configured:** `.env` locally; a Fly secret in production. The two are
+  independent — rotating one does not rotate the other.
+- **Why Basic auth and not a session cookie:** the CSP is `form-action 'none'`
+  (§T-7), so a login form cannot post. Weakening a security control to satisfy a note
+  about the _shape_ of the control is the wrong trade. Fly terminates TLS and
+  `force_https` redirects, so the credential never crosses the network in the clear.
+
+**Rotation:**
+
+```bash
+# 1. generate and put the new value in .env (never echo it)
+# 2. push the same value to production, reading from .env:
+grep '^DASHBOARD_PASSWORD=' .env | flyctl secrets import --app signal-desk
+# 3. flyctl restarts the machine automatically; confirm:
+curl -s -o /dev/null -w '%{http_code}\n' https://signal-desk.fly.dev/   # expect 401
+```
 
 ---
 
@@ -283,3 +349,43 @@ a single owned read → confirm the old tokens fail.
 **If a key is believed leaked:** revoke first, then investigate. Check the vendor's usage dashboard
 for spend during the exposure window. Rotate before determining scope — an unrevoked leaked key
 costs money every minute of analysis.
+
+---
+
+## 11. Production configuration — Fly.io, from 2026-08-14
+
+Two environments, deliberately separate. **Local secrets are not production secrets by
+default**; they were copied once, at provisioning, and diverge from here.
+
+| Where             | Set with                                               | Holds                                                     |
+| ----------------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| Non-secret config | `[env]` in `fly.toml` — committed, reviewable          | modes, budgets, `DATABASE_URL`, `TZ`, `MODEL_CACHE_DIR`   |
+| Secrets           | `flyctl secrets import` — encrypted, never in the repo | `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `DASHBOARD_*`, `X_*` |
+
+```bash
+flyctl secrets list --app signal-desk      # names and digests only, never values
+flyctl secrets import --app signal-desk    # reads KEY=value from stdin, not argv
+```
+
+`import` over `set` on purpose: `flyctl secrets set KEY=value` puts the value in the
+process command line, where anything reading `/proc` on the operator's machine can see
+it. `import` reads stdin.
+
+### Production differences from local
+
+|                      | Local                        | Production                                                                             |
+| -------------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | `file:./data/signal-desk.db` | `file:/data/signal-desk.db` — absolute, on the volume                                  |
+| `MODEL_CACHE_DIR`    | unset → `<repo>/.models`     | `/data/.models` — on the volume, not in the image                                      |
+| `X_MODE`             | `MOCK`                       | `MOCK` — same reason, see §4a                                                          |
+| `X_ENABLE_POSTING`   | `false`                      | `false` — **there is no configuration in this system that enables autonomous posting** |
+| `DASHBOARD_PASSWORD` | set, unused on loopback      | set, and load-bearing                                                                  |
+
+### The one thing to check after any deploy
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://signal-desk.fly.dev/
+```
+
+**401 is the correct answer.** A `200` means the password did not reach the machine and
+the console is public.

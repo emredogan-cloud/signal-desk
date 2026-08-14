@@ -509,3 +509,119 @@ Recording non-goals prevents scope creep later:
 - **No second AI vendor.** Embeddings are local specifically to avoid one.
 - **No microservices.** If a component needs to scale independently, that is a signal the design was
   wrong, not a reason to split it.
+
+---
+
+## 12. Deployment — the record, 2026-08-14
+
+Sections 1–11 were written before anything was deployed. §2 deferred the decision to
+Phase 10 and said moving off the operator's machine would be "a deployment change, not
+a rewrite." This section is what actually happened when that was tried, including the
+parts the plan had wrong.
+
+### The decision, and why Vercel could not have it
+
+The brief asked for the dashboard on **Vercel**. That is not compatible with this
+persistence model, and the incompatibility is structural rather than a configuration
+problem:
+
+- `apps/web` opens the SQLite file **by path**, through `better-sqlite3` — a native
+  binding — on every request. §7's whole design is _one writer and one reader against
+  one file._
+- Vercel Functions have an ephemeral filesystem and no way to share a writable volume
+  with a long-lived process elsewhere. A dashboard deployed there would read either
+  nothing or a snapshot frozen at build time. Both render as a **confident empty
+  screen**, which this system must never produce.
+
+The alternatives were weighed as: (A) Vercel + a remote Postgres — a migration off
+SQLite, contradicting §2 and §11 for no benefit this workload can use; (B) Vercel +
+an API on the worker host — a public API surface plus an auth system, to move data
+that already lives beside the reader; (C) **one always-on host running both**; (D)
+something else materially better.
+
+**(C).** It is the only option that deploys the architecture in §7 rather than
+replacing it.
+
+### Provider: Fly.io
+
+| Criterion             | Why Fly                                                                           | What it beat                                       |
+| --------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Persistent filesystem | Volumes, per-machine, encrypted, snapshotted daily (5 retained)                   | Vercel/Lambda: none                                |
+| Always-on             | `auto_stop_machines = false`; the scheduler is the product, not a request handler | Serverless: suspends between requests              |
+| Docker-native         | The repo already had a Dockerfile written for exactly this                        | Lightsail/EC2: install Docker, write systemd units |
+| HTTPS + hostname      | Automatic on `*.fly.dev`                                                          | Lightsail: no TLS on a bare IP without a domain    |
+| CLI-first             | `flyctl` does provisioning, secrets, logs, SSH, restart                           | AWS console steps                                  |
+| Cost                  | ~$6.37/month all-in (below)                                                       | Lightsail $5 + the setup and TLS work above        |
+| Already trusted       | The operator runs another app on the same billed account                          | A new vendor relationship                          |
+
+AWS was the credible rival and the operator knows it. It lost on total effort per
+dollar, not on capability: roughly $1.37/month cheaper for a materially larger amount
+of hand-built plumbing (TLS, systemd, restart policy, log shipping).
+
+### Topology
+
+```
+                    fly.io / fra (Frankfurt)
+   ┌──────────────────────────────────────────────────────────┐
+   │  machine 185d617bd4ede8 · shared-cpu-1x · 1GB            │
+   │                                                          │
+   │   supervise.js  (PID 1)                                  │
+   │     ├── worker      — croner, ingests 60 sources         │
+   │     ├── dashboard   — next start, :3000                  │
+   │     └── every 20min — cluster → score → analyze          │
+   │                                                          │
+   │   /data  (3GB volume, encrypted, daily snapshots)        │
+   │     ├── signal-desk.db      ← one writer, one reader     │
+   │     ├── .models/            ← bge-small, fetched once    │
+   │     └── backups/            ← pnpm backup, 7 retained    │
+   └────────────────────────┬─────────────────────────────────┘
+                            │ TLS, force_https
+                   https://signal-desk.fly.dev
+                     HTTP Basic — see apps/web/src/proxy.ts
+```
+
+### Three things the plan had wrong, found by deploying
+
+**1. The worker never ran the pipeline.** `scheduler.ts` ticks `ingestOnce` and
+nothing else; clustering, scoring, and analysis were always CLI commands a human ran.
+Invisible while the operator was the scheduler. On Fly it ingested **5,196 raw items
+and produced zero events**, and the dashboard correctly reported "Nothing has cleared
+the gate." Fixed in `supervise.ts`, which now runs the three stages in sequence every
+20 minutes by spawning the same CLIs — one implementation, not a second copy that
+drifts.
+
+**2. The dashboard had to travel with the worker.** The Dockerfile built the worker
+only. Nothing was wrong with it until the dashboard turned out not to be separable
+from the file it reads.
+
+**3. `.dockerignore` was matching only the context root.** `node_modules` excluded
+`/node_modules` and left every `packages/*/node_modules` in the build context: 310MB
+of upload, and the build stage's `COPY . .` would have laid the **host's** compiled
+`better-sqlite3` over the one built for the image. Context after the fix: **2.4MB**.
+
+### Cost, measured where possible
+
+| Line                                      | Basis                                                                        |          Monthly |
+| ----------------------------------------- | ---------------------------------------------------------------------------- | ---------------: |
+| Fly machine, shared-cpu-1x 1GB, always on | published rate                                                               |        **$5.92** |
+| Fly volume, 3GB                           | $0.15/GB                                                                     |        **$0.45** |
+| Egress                                    | ~1GB at $0.02/GB, mostly feed fetches inbound (free)                         |       **~$0.02** |
+| Anthropic                                 | measured $0.0341 for 2 triage calls; bounded by `AI_DAILY_BUDGET_USD=$2/day` |        **$2–20** |
+| X                                         | $0.07 spent to date, all on diagnosis; integration not live                  |           **$0** |
+| **Total**                                 |                                                                              | **≈ $6.40 + AI** |
+
+The AI line is a range and not a measurement: one day of autonomous operation has not
+happened yet. What _is_ measured is the shape — the rule gate kills 98.7%, and a full
+pass over the 65 survivors cost $0.70. The $2/day ceiling is enforced by the budget
+guard, so the worst case is bounded even if the estimate is wrong.
+
+### Commands
+
+```bash
+pnpm deploy            # flyctl deploy --ha=false
+pnpm remote:status     # machine state, health checks
+pnpm remote:logs       # structured worker logs
+pnpm remote:ssh        # shell on the machine
+pnpm remote:backup     # backup + verified restore, on the volume
+pnpm healthcheck       # behavioural checks against the public URL
+```

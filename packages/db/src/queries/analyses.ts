@@ -74,15 +74,50 @@ export function insertAnalyses(db: Db, rows: readonly AnalysisInsert[], createdA
  * ledger rather than keeping a counter means the figure survives a restart and cannot
  * drift from what was actually recorded.
  */
-export function spendSince(db: Db, since: Date): number {
+export function spendSince(db: Db, since: Date, provider: SpendProvider = 'anthropic'): number {
   // Reads the LEDGER, not `analyses`. Reading `analyses` meant `--reset` zeroed the
   // figure the budget guard depends on.
+  //
+  // Filtered by provider since 2026-08-14. The two budgets are separate ceilings on
+  // separate vendors; summing them would let an X owned read push deep analysis into
+  // FRUGAL, and let a heavy analysis day silently consume the X allowance.
   const row = db
     .select({ total: sql<number>`coalesce(sum(${spendLedger.costMicroUsd}), 0)` })
     .from(spendLedger)
-    .where(gte(spendLedger.spentAt, since))
+    .where(and(gte(spendLedger.spentAt, since), eq(spendLedger.provider, provider)))
     .get();
   return (row?.total ?? 0) / 1_000_000;
+}
+
+export type SpendProvider = 'anthropic' | 'x';
+
+/**
+ * Record one metered non-Anthropic request.
+ *
+ * Takes the cost in USD and rounds to micro-dollars here, so callers cannot each
+ * invent their own rounding. `stage` is the request kind (`user_read`, `owned_read`),
+ * `model` the endpoint — the columns already mean "what was bought" and "from what",
+ * which is the same question for both vendors.
+ */
+export function recordVendorSpend(
+  db: Db,
+  row: {
+    readonly provider: SpendProvider;
+    readonly stage: string;
+    readonly endpoint: string;
+    readonly costUsd: number;
+    readonly spentAt: Date;
+  },
+): void {
+  db.insert(spendLedger)
+    .values({
+      provider: row.provider,
+      stage: row.stage,
+      model: row.endpoint,
+      costMicroUsd: Math.round(row.costUsd * 1_000_000),
+      spentAt: row.spentAt,
+    })
+    .run();
 }
 
 /**

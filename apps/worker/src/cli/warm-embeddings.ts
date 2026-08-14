@@ -1,5 +1,5 @@
 import { OnnxEmbedder, EMBEDDING_MODEL } from '@signal-desk/adapters';
-import { findRepoRoot } from '../repo-root.js';
+import { modelCacheDir } from '@signal-desk/shared';
 
 /**
  * `pnpm embeddings:warm` — download and cache the embedding model, once.
@@ -10,7 +10,7 @@ import { findRepoRoot } from '../repo-root.js';
  * 2 if the model is absent.
  */
 async function main(): Promise<number> {
-  const cacheDir = `${findRepoRoot()}/.models`;
+  const cacheDir = modelCacheDir();
   const embedder = new OnnxEmbedder({ cacheDir });
 
   console.log(`\nmodel:  ${EMBEDDING_MODEL}`);

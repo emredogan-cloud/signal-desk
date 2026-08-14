@@ -23,6 +23,7 @@ export const SECRET_KEYS: ReadonlySet<string> = new Set([
   'X_ACCESS_TOKEN_SECRET',
   'GITHUB_TOKEN',
   'NTFY_TOPIC',
+  'DASHBOARD_PASSWORD',
 ]);
 
 /** Which phase first needs each variable. ENV-HANDBOOK.md §1. */
@@ -35,6 +36,7 @@ const FIRST_NEEDED: Record<string, string> = {
   X_ENABLE_POSTING: 'Phase 13',
   GITHUB_TOKEN: 'optional',
   NTFY_TOPIC: 'Phase 11 (optional)',
+  DASHBOARD_PASSWORD: 'when deployed',
 };
 
 export const ALL_CONFIG_KEYS: readonly string[] = Object.keys(configSchema.shape);

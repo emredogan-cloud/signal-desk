@@ -31,6 +31,44 @@ const CSP = [
   "object-src 'none'",
 ].join('; ');
 
+/**
+ * The workspace packages are **runtime Node dependencies, not bundler input.**
+ *
+ * ### The defect this fixes — 2026-08-14
+ *
+ * `pnpm web:dev` returned HTTP 500 with 35 `Module not found` errors — one per relative
+ * import inside `@signal-desk/{shared,db,core}`. `pnpm build` succeeded. That split is
+ * the whole explanation:
+ *
+ * Every internal package exports `{ "development": "./src/index.ts", "default":
+ * "./dist/index.js" }` (PROJECT-MEMORY §C — it exists so `tsx` CLIs never execute a
+ * stale `dist/`). Turbopack applies the `development` condition under `next dev`, so it
+ * bundled raw TypeScript whose relative specifiers end in `.js` — the extension
+ * `module: NodeNext` requires and `tsc` rewrites at emit. **Turbopack does not perform
+ * that `.js` → `.ts` rewrite for source outside the app directory**, so every one of
+ * them missed. Verified by probe: changing a single specifier to extensionless removed
+ * exactly that one error and nothing else. `next build` does not apply `development`,
+ * resolves `dist/index.js`, where the `.js` files physically exist — which is why a
+ * green build never revealed this and only opening the page did.
+ *
+ * `transpilePackages` was the cause, not the cure: it is what pulled the packages into
+ * the bundle in the first place. Turbopack has no `extensionAlias` equivalent
+ * (`next.config` exposes only `root`, `rules`, `resolveAlias`, `resolveExtensions`,
+ * `debugIds`), and `turbopack.resolveAlias` was measured to have no effect on these
+ * specifiers at all.
+ *
+ * `serverExternalPackages` is the right mechanism on the merits, independent of the
+ * bug: `@signal-desk/db` opens SQLite through `better-sqlite3`, a **native binding**
+ * that cannot be bundled, and this dashboard is server-components-only — no workspace
+ * value ever crosses into a client bundle (`mock-badge.tsx` imports a *type*, which is
+ * erased). Node's own resolver loads `dist/index.js` in dev and in production alike, so
+ * the two paths can no longer disagree. A package may not appear in both lists; Next
+ * throws at build start if it does.
+ *
+ * Consequence, stated plainly: **editing a package requires `tsc -b` before the
+ * dashboard sees it.** `pnpm web:dev` runs it, so the stale-`dist/` trap PROJECT-MEMORY
+ * §C records for `tsx` scripts cannot reappear here by forgetting a step.
+ */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
@@ -50,9 +88,10 @@ const nextConfig: NextConfig = {
         ],
       },
     ]),
-  // Workspace packages ship TypeScript source; Next compiles them in-place rather
-  // than requiring a separate build step before `next dev` works.
-  transpilePackages: ['@signal-desk/shared', '@signal-desk/db', '@signal-desk/core'],
+  // See the block above `nextConfig`. These are loaded by Node from their compiled
+  // `dist/`, never bundled — which is both the fix for the dev-mode resolution failure
+  // and the only way `better-sqlite3`'s native binding can load at all.
+  serverExternalPackages: ['@signal-desk/shared', '@signal-desk/db', '@signal-desk/core'],
   poweredByHeader: false,
 };
 

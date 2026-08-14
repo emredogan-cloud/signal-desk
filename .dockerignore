@@ -1,9 +1,29 @@
-node_modules
-dist
-.next
+# Docker matches these against the context root unless they start with `**/`.
+#
+# That subtlety was not academic. `node_modules` alone excluded `/node_modules` and
+# left `packages/*/node_modules` and `apps/*/node_modules` in the context — and worse:
+# the build stage's `COPY . .` would have laid the **host's** compiled `better-sqlite3`
+# binding over the one the deps stage built for the image. A native binding built on
+# the host landing in a Debian bookworm container is a runtime failure that looks
+# nothing like its cause. Fixed 2026-08-14; the context went from 310MB to 2.4MB.
+**/node_modules
+**/dist
+**/.next
+**/*.tsbuildinfo
 out
 coverage
+
+# The database and anything derived from third-party content.
 data
+**/data/*.db
+**/data/*.db-wal
+**/data/*.db-shm
+
+# The ONNX embedding weights: 128MB that lived in the image until 2026-08-14. They
+# belong on the persistent volume, fetched once by `pnpm embeddings:warm` — see
+# `modelCacheDir()` in packages/shared.
+**/.models
+
 .git
 .github
 *.log
@@ -12,4 +32,3 @@ data
 !.env.example
 docs
 fixtures/**/*.tmp
-*.tsbuildinfo

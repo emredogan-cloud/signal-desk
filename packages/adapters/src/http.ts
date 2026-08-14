@@ -199,11 +199,21 @@ function finish(
   };
 }
 
+/**
+ * Both spellings, deliberately. GitHub sends `x-ratelimit-*`; **X sends
+ * `x-rate-limit-*`** — one hyphen apart, and an allowlist that carries only the first
+ * drops the second silently. Found 2026-08-14: the X owned-read client reported
+ * "remaining: not sent" against a live response that had sent it, which is the
+ * failure mode where a client discovers its ceiling by hitting it.
+ */
 const RATE_LIMIT_HEADERS = [
   'x-ratelimit-limit',
   'x-ratelimit-remaining',
   'x-ratelimit-reset',
   'x-ratelimit-used',
+  'x-rate-limit-limit',
+  'x-rate-limit-remaining',
+  'x-rate-limit-reset',
   'retry-after',
 ] as const;
 

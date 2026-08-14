@@ -626,6 +626,91 @@ pnpm build && unshare -r -n -- node apps/worker/dist/cli/ingest.js --force --qui
 
 ---
 
+## O2. LIVE DEPLOYMENT — 2026-08-14
+
+**The system no longer depends on the operator's machine being switched on.** That was
+`ARCHITECTURE.md` §2's stated, accepted limitation for fifteen phases, and it is now
+closed.
+
+### Where it runs
+
+|             |                                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| Dashboard   | **https://signal-desk.fly.dev** — HTTP Basic, `DASHBOARD_USER` / `DASHBOARD_PASSWORD`                         |
+| Provider    | Fly.io, org `personal`, app `signal-desk`, region `fra`                                                       |
+| Machine     | `185d617bd4ede8`, shared-cpu-1x, 1GB, `auto_stop_machines = false`                                            |
+| Volume      | `signal_desk_data`, 3GB, encrypted, daily snapshots (5 retained)                                              |
+| Database    | `/data/signal-desk.db` — on the volume, survives deploys and reboots                                          |
+| Model cache | `/data/.models` — bge-small, fetched once, not in the image                                                   |
+| Backups     | `/data/backups`, 7 retained, each **restored and integrity-checked**                                          |
+| Process     | `supervise.js` as PID 1 → worker + dashboard + a 20-minute pipeline cycle                                     |
+| Restart     | Fly machine policy + supervisor restarts a dead child, gives up after 5 crashes/60s so the failure is visible |
+
+The dashboard password is in the local **`.env`** (gitignored) and, separately, as a
+Fly secret. It has never been written to a document, a log, or a commit.
+
+### Modes in production
+
+`DATA_MODE=LIVE`, `AI_MODE=LIVE`, `X_MODE=MOCK`, `X_ENABLE_POSTING=false`.
+**Nothing has been posted to X, and no configuration in this system enables it.**
+
+### Six real defects this stage found
+
+1. **`pnpm web:dev` was completely broken** — HTTP 500, 35 `Module not found` errors.
+   Turbopack applies the `development` export condition and loaded raw TypeScript
+   whose relative imports end in `.js`; it does not rewrite those to `.ts` for source
+   outside the app directory. `next build` never hit it because production does not
+   apply that condition. Fixed with a `react-server` export condition ahead of
+   `development` in the three packages the dashboard consumes.
+
+2. **The dashboard was reading the wrong database.** `next` runs with its cwd in
+   `apps/web`, so the repo-root `.env` was never loaded and `file:./data/...`
+   resolved to `apps/web/data/` — a 4KB file it created itself. The screen showed
+   **MOCK MODE** over an empty state while a 64MB live database sat three directories
+   up. Both symptoms, one cause. `apps/web/src/lib/env.ts` anchors on the repo root.
+
+3. **The worker never ran the pipeline.** `scheduler.ts` ticks ingestion only;
+   cluster/score/analyze were always commands a human ran. On Fly it ingested 5,196
+   items and produced **zero events**. `supervise.ts` now runs the three stages every
+   20 minutes.
+
+4. **`X_ACCESS_TOKEN` is truncated** — a 30-character suffix where X issues 40, in
+   _both_ credential sets that had been pasted into `.env`. Eliminating the
+   alternatives took six metered requests: the OAuth 1.0a implementation reproduces
+   X's published signature vector byte for byte, and an app-only bearer returns
+   `403 Unsupported Authentication` (recognised, wrong auth type). `pnpm x:verify` now
+   checks shapes for free before spending anything.
+
+5. **`.dockerignore` matched only the context root.** `node_modules` left every
+   `packages/*/node_modules` in the context — 310MB of upload, and `COPY . .` would
+   have laid the host's compiled `better-sqlite3` over the image's. Now 2.4MB.
+
+6. **`safeFetch` dropped X's rate-limit headers.** The allowlist had GitHub's
+   `x-ratelimit-*` and not X's `x-rate-limit-*`, one hyphen apart — a client that
+   discovers its ceiling by hitting it.
+
+### What is NOT true yet
+
+- **X is not integrated.** `pnpm x:verify` refuses; see `ENV-HANDBOOK.md` §4a for the
+  one console action that fixes it. `$0.07` has been spent on X, all on diagnosis.
+- **No autonomous day has elapsed.** The AI cost line is a bounded range, not a
+  measurement. `AI_DAILY_BUDGET_USD=$2` is the hard ceiling.
+- **The local 64MB database was not migrated.** The deployment started clean and
+  re-ingested; the local history is intact at `data/signal-desk.db` and backed up.
+- **`ALERT_MIN_PRIORITY=urgent` with no `NTFY_TOPIC`** means alerts go to a log nobody
+  reads on a machine nobody watches. For a 24/7 system this is the most valuable
+  remaining gap, and it is one variable.
+
+### Commands
+
+```bash
+pnpm deploy          pnpm remote:status    pnpm remote:logs
+pnpm remote:ssh      pnpm remote:backup    pnpm healthcheck
+pnpm x:verify        pnpm backup           pnpm check:env
+```
+
+---
+
 ## P. CONTINUATION PROTOCOL
 
 ```

@@ -10,7 +10,8 @@ import {
   envelopeItemsFor,
   sourceHealthRows,
 } from '@signal-desk/db';
-import { parseConfig, deriveEffectiveModes } from '@signal-desk/shared';
+import { deriveEffectiveModes } from '@signal-desk/shared';
+import { serverConfig } from './env';
 import {
   buildStrategy,
   buildTrendCard,
@@ -61,9 +62,14 @@ export type StreamRow = {
  * from `import.meta.url`, and Turbopack tries to statically resolve that as a module
  * specifier, failing the build. Dropping the call was the right fix on the merits and
  * happened to fix the build too — the reverse order would have been a workaround.
+ *
+ * `serverConfig()` rather than `parseConfig(process.env)`: the dashboard runs with its
+ * working directory in `apps/web`, so both the `.env` file and a relative
+ * `DATABASE_URL` have to be anchored to the repository root explicitly. See
+ * `lib/env.ts` for the empty-dashboard defect that cost.
  */
 function open() {
-  const config = parseConfig(process.env);
+  const config = serverConfig();
   const handle = openDatabase({ url: config.DATABASE_URL });
   return { handle, config };
 }
@@ -97,8 +103,7 @@ export function schemaReady(): boolean {
 }
 
 export function modes() {
-  const config = parseConfig(process.env);
-  return deriveEffectiveModes(config);
+  return deriveEffectiveModes(serverConfig());
 }
 
 /** The live intelligence stream — gate survivors, ranked. */

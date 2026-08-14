@@ -94,6 +94,22 @@ export const configSchema = z.object({
   // ─── GitHub ─────────────────────────────────────────────────────────
   GITHUB_TOKEN: optionalSecret,
 
+  // ─── Dashboard ──────────────────────────────────────────────────────
+  /**
+   * The single-operator credential for the dashboard, checked in
+   * `apps/web/src/proxy.ts`.
+   *
+   * Optional in the schema, **mandatory in practice from the moment the dashboard is
+   * reachable from anywhere but `127.0.0.1`** — which it has been since 2026-08-14.
+   * The proxy fails closed when the password is absent, so an unset value degrades to
+   * "nobody can read the dashboard", never to "anybody can". Schema-optional and
+   * runtime-mandatory is the right split: local development on a loopback binding
+   * genuinely does not need it, and requiring it would push developers toward a
+   * throwaway value that then ships.
+   */
+  DASHBOARD_USER: withDefault(z.string().min(1), 'operator'),
+  DASHBOARD_PASSWORD: optionalSecret,
+
   // ─── Alerts ─────────────────────────────────────────────────────────
   NTFY_TOPIC: optionalSecret,
   ALERT_MIN_PRIORITY: withDefault(z.enum(['urgent', 'high', 'trend', 'educational']), 'urgent'),

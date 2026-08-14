@@ -13,7 +13,7 @@ import {
   LABELLED_CLUSTERS,
 } from '@signal-desk/core';
 import { bootstrap } from '../bootstrap.js';
-import { findRepoRoot } from '../repo-root.js';
+import { modelCacheDir } from '@signal-desk/shared';
 import { renderTable } from '../table.js';
 
 /**
@@ -33,7 +33,7 @@ async function main(): Promise<number> {
     const rows = loadEntityRegistryRows(handle.db);
     const registry = new EntityRegistry(rows.entities, rows.aliases);
 
-    const embedder = createEmbedder({ cacheDir: `${findRepoRoot()}/.models` });
+    const embedder = createEmbedder({ cacheDir: modelCacheDir() });
     const real = LABELLED_CLUSTERS.filter((c) => c.provenance === 'real');
     const synthetic = LABELLED_CLUSTERS.filter((c) => c.provenance === 'synthetic');
 
