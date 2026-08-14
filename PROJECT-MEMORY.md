@@ -788,6 +788,103 @@ Publishing is manual. There is no send button anywhere in the panel, and
 
 ---
 
+## O4. X AUTHORITY ENGINE — 2026-08-14
+
+### The account, from the real profile screenshot
+
+`@emredogancloud` · **23 takipçi** · 74 takip · 29 gönderi since Jan 2024 · **bio empty** ·
+avatar and banner are the **same** generic cloud render · no pinned post.
+
+This is an account-launch problem, not a growth problem, and the follower count is the
+dominant cause of the 30–50 impressions. Everything else is downstream of it.
+
+### The finding that changes the strategy
+
+`github.com/xai-org/x-algorithm` was pushed **2026-08-13T17:23:57Z** — a day before this
+work, adding **300 files**. (This corrects the note in [[x-ranker-facts-2026]] that the
+repo was ~3 months stale; cadence is roughly quarterly: Jan → May → Aug.) The drop opened
+the **visibility-filtering** side for the first time: `abuse-enforcement-service/`,
+`agatha/`, `botmaker/`, `scarecrow/`, `user-cred-v2/`.
+
+From `abuse-enforcement-service/service-lib/rules/`, verified by reading the YAML:
+
+| Classifier             | Label applied                   | TTL     |
+| ---------------------- | ------------------------------- | ------- |
+| `llm_slop_user`        | `SpamHighRecall` on the account | 30 days |
+| `llm_slop_post`        | `RiskyHighVizReply` on the post | 30 days |
+| `fast_reply_spam_post` | `SpamHighRecall` on the post    | 30 days |
+
+And both rule files begin with `high_follower_count` → **skip** and `pagerank_skipped`
+(`cred.score >= 50`) → **skip**. Large, credible accounts are exempt from these checks;
+a 23-follower account is fully exposed to all of them.
+
+**Three consequences:**
+
+1. AI-sounding posts are a _named, labelled_ risk. The composer's hype/emoji/link
+   stripping stopped being a style choice and became a safety control.
+2. "Reply fast to big accounts" — the standard growth advice — is the single most
+   dangerous tactic available to this account.
+3. `agatha/` labels an account from _others' reactions_ (blocks and reports **relative to
+   favorites**), so provocation carries account-level risk, not just post-level.
+
+### Measured detection latency (production, first backfill poll per source excluded)
+
+| Stage                                                |                                       Measured |
+| ---------------------------------------------------- | ---------------------------------------------: |
+| Published → detected, overall                        |            p50 **36 min**, mean 59 min (n=399) |
+| Published → detected, GitHub releases / status pages |                                  **0.5–6 min** |
+| Detected → first score                               |     p50 **6.7 min**, p90 14.5, max 17.5 (n=21) |
+| Pipeline cycle                                       |                                  19.6–20.9 min |
+| Anthropic / OpenAI / Gemini announcement             | **NOT MEASURED** — none occurred in the window |
+
+The fixed 20-minute cycle, not detection, was the dominant term. Fixed with an
+**event-driven fast path**: the supervisor asks one indexed question every 60s — has a
+Priority-1 source published since the last run? — and runs immediately if so. Shortening
+the cycle was the wrong fix; a full pass costs 413s of CPU on this machine.
+
+### X API — what it can actually do
+
+**Nothing on X is monitored, and that is an economic conclusion, not a technical one.**
+Pay-per-use since Feb 2026, no free tier: 50 accounts × ~20 posts/day ≈ **$150/month**
+for information the same companies publish free on RSS/GitHub/status, usually earlier.
+X Lists read by a human once a day is the correct substitute. `X_ACCESS_TOKEN` is still
+truncated (30-char suffix, X issues 40); `deriveEffectiveModes` now detects malformed
+credentials and degrades the badge automatically. Fixing it unlocks **owned-account
+analytics (~$3/mo)**, not monitoring.
+
+### Cost, measured
+
+Opus **$0.109/call**, Haiku **$0.0042/call** (181 calls, $1.8036 on the ledger).
+Fly machine $9.08 + volume $0.45. Minimum **$9.55/mo**, expected **$25–45**, hard ceiling
+**$72.63** — the ceiling is enforced by `AI_DAILY_BUDGET_USD=2.00`, not estimated.
+
+### Shipped
+
+- Phone alerts via ntfy, delivery verified (HTTP 200). Turkish body with age, category,
+  score and why-now; deep-links to the event via ntfy's `Click` header. Dedup, quiet
+  hours 23:00–07:00 and a 4/day cap were already implemented and now actually run —
+  `alerts` is a pipeline stage.
+- Analysis prompt writes **Turkish**; `draftMaterial` stays **English**. Developer terms
+  stay English on purpose ("context window", not "bağlam penceresi").
+- GPT image prompt assembled **in code** from validated fields with hard negative
+  constraints, and only when a real before/after exists. A wrong sentence is visibly
+  wrong; a wrong chart is not.
+- Mobile-first workflow: detail first at full width, list below, rail as a status strip,
+  44px tap targets. Verified against production at **390px and 320px** — no horizontal
+  overflow, detail first, smallest button exactly 44px.
+- `docs/X-BUYUME-VE-HESAP-BASLANGIC-SISTEMI-TR.html` — the Turkish report, every claim
+  tagged DOĞRULANMIŞ / ÖLÇÜLDÜ / ÇIKARIM / ÖNERİ / ÖLÇÜLMEDİ.
+
+### Known limitations
+
+- Analyses written before this deploy remain in English; the prompt applies going forward.
+- No autonomous day has completed, so the expected-cost range is a range.
+- The 320px/390px verification used a local harness that strips `frame-ancestors` and
+  `X-Frame-Options` — both headers are correct in production and blocked the iframe,
+  which is why the harness exists. Production headers were not changed.
+
+---
+
 ## P. CONTINUATION PROTOCOL
 
 ```

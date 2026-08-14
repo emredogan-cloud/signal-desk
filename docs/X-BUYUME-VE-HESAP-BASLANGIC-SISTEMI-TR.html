@@ -1,0 +1,1274 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signal-Desk — X Büyüme ve Hesap Başlangıç Sistemi</title>
+    <style>
+      :root {
+        --bg: #0b0d12;
+        --surface: #12151d;
+        --surface2: #181c26;
+        --line: #242b3a;
+        --line2: #323b4e;
+        --fg: #e9edf5;
+        --fg2: #a3adc0;
+        --fg3: #6f7a8d;
+        --accent: #3b7dff;
+        --accent-dim: #16294d;
+        --ok: #3fb96a;
+        --ok-bg: #0f2418;
+        --warn: #e0a233;
+        --warn-bg: #291f0d;
+        --bad: #f0563f;
+        --bad-bg: #2a1310;
+        --info: #4d9bd6;
+        --info-bg: #0e1e2b;
+        --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.65 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          'Noto Sans',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 0 20px 100px;
+      }
+      header.top {
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        margin-bottom: 34px;
+      }
+      header.top .wrap {
+        padding-top: 44px;
+        padding-bottom: 34px;
+      }
+      h1 {
+        font-size: 31px;
+        line-height: 1.2;
+        margin: 0 0 10px;
+        letter-spacing: -0.02em;
+      }
+      .sub {
+        color: var(--fg2);
+        font-size: 15px;
+        margin: 0;
+      }
+      .meta {
+        color: var(--fg3);
+        font-size: 12.5px;
+        margin-top: 14px;
+        font-family: var(--mono);
+      }
+      h2 {
+        font-size: 22px;
+        margin: 52px 0 6px;
+        letter-spacing: -0.01em;
+        scroll-margin-top: 20px;
+      }
+      h2 .num {
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 16px;
+        margin-right: 9px;
+      }
+      h3 {
+        font-size: 16.5px;
+        margin: 30px 0 8px;
+      }
+      h4 {
+        font-size: 14px;
+        margin: 20px 0 6px;
+        color: var(--fg2);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+      }
+      p {
+        margin: 0 0 13px;
+      }
+      a {
+        color: var(--accent);
+      }
+      ul,
+      ol {
+        margin: 0 0 14px;
+        padding-left: 22px;
+      }
+      li {
+        margin-bottom: 7px;
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 0.88em;
+        background: var(--surface2);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      pre {
+        background: var(--surface2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        overflow-x: auto;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.55;
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 44px 0;
+      }
+
+      .tag {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        padding: 2.5px 7px;
+        border-radius: 4px;
+        border: 1px solid;
+        vertical-align: 2px;
+      }
+      .t-ver {
+        color: var(--ok);
+        background: var(--ok-bg);
+        border-color: #1c4028;
+      }
+      .t-mea {
+        color: var(--info);
+        background: var(--info-bg);
+        border-color: #1d3a52;
+      }
+      .t-inf {
+        color: var(--warn);
+        background: var(--warn-bg);
+        border-color: #463314;
+      }
+      .t-rec {
+        color: var(--accent);
+        background: var(--accent-dim);
+        border-color: #2b529c;
+      }
+      .t-nm {
+        color: var(--fg3);
+        background: var(--surface2);
+        border-color: var(--line);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0;
+        font-size: 13.5px;
+      }
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 8px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--surface2);
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--fg2);
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-family: var(--mono);
+        white-space: nowrap;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+
+      .box {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--accent);
+        background: var(--surface);
+        border-radius: 0 8px 8px 0;
+        padding: 14px 16px;
+        margin: 18px 0;
+      }
+      .box.bad {
+        border-left-color: var(--bad);
+      }
+      .box.ok {
+        border-left-color: var(--ok);
+      }
+      .box.warn {
+        border-left-color: var(--warn);
+      }
+      .box .h {
+        font-weight: 650;
+        margin-bottom: 5px;
+      }
+      .box p:last-child {
+        margin-bottom: 0;
+      }
+
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin: 18px 0;
+      }
+      .kpi {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 12px 14px;
+      }
+      .kpi .k {
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        color: var(--fg3);
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+      .kpi .v {
+        font-family: var(--mono);
+        font-size: 21px;
+        font-weight: 650;
+        margin-top: 3px;
+      }
+      .kpi .n {
+        font-size: 11.5px;
+        color: var(--fg2);
+        margin-top: 2px;
+      }
+
+      nav.toc {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 10px;
+      }
+      nav.toc ol {
+        columns: 2;
+        column-gap: 30px;
+        padding-left: 20px;
+        margin: 0;
+      }
+      nav.toc li {
+        margin-bottom: 5px;
+        font-size: 13.5px;
+      }
+      @media (max-width: 640px) {
+        nav.toc ol {
+          columns: 1;
+        }
+        h1 {
+          font-size: 25px;
+        }
+        h2 {
+          font-size: 19px;
+        }
+      }
+
+      .do {
+        color: var(--ok);
+        font-weight: 700;
+      }
+      .dont {
+        color: var(--bad);
+        font-weight: 700;
+      }
+      .lede {
+        font-size: 16.5px;
+        color: var(--fg2);
+        border-left: 3px solid var(--line2);
+        padding-left: 14px;
+        margin: 0 0 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap">
+        <h1>X Büyüme ve Hesap Başlangıç Sistemi</h1>
+        <p class="sub">
+          @emredogancloud için operasyonel plan — ve Signal-Desk'in bu planın neresinde durduğu.
+        </p>
+        <p class="meta">Hazırlanma: 14 Ağustos 2026 · Signal-Desk v0.1.0 · signal-desk.fly.dev</p>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <p class="lede">
+        Bu rapordaki her iddia etiketli. <span class="tag t-ver">DOĞRULANMIŞ</span> birincil
+        kaynaktan teyit edilmiştir. <span class="tag t-mea">ÖLÇÜLDÜ</span> bu sistemin canlı
+        veritabanından ölçülmüştür. <span class="tag t-inf">ÇIKARIM</span> kanıttan makul bir
+        sonuçtur ama kanıtın kendisi değildir. <span class="tag t-rec">ÖNERİ</span> bir karardır,
+        gerekçesiyle birlikte. <span class="tag t-nm">ÖLÇÜLMEDİ</span> ise ölçülemedi demektir —
+        uydurulmuş sayı yoktur.
+      </p>
+
+      <nav class="toc">
+        <ol>
+          <li><a href="#a">Mevcut hesabın denetimi</a></li>
+          <li><a href="#b">30–50 görüntülenme neden oluyor</a></li>
+          <li><a href="#c">Yeni sürümde ne değişti (13 Ağustos)</a></li>
+          <li><a href="#d">İlk 30 gün</a></li>
+          <li><a href="#e">Profil optimizasyonu</a></li>
+          <li><a href="#f">İçerik formülleri</a></li>
+          <li><a href="#g">Reply ve alıntı stratejisi</a></li>
+          <li><a href="#h">Görsel ve video</a></li>
+          <li><a href="#i">Signal-Desk ne kadar hızlı yakalıyor</a></li>
+          <li><a href="#j">X API gerçekte ne görebiliyor</a></li>
+          <li><a href="#k">İzlenecek kaynaklar</a></li>
+          <li><a href="#l">Aylık maliyet</a></li>
+          <li><a href="#m">Yapılmayacaklar</a></li>
+          <li><a href="#n">Gerçekçi beklentiler</a></li>
+          <li><a href="#o">Kaynaklar</a></li>
+        </ol>
+      </nav>
+
+      <!-- ══════════════════════════════════════════════════════════ A -->
+      <h2 id="a"><span class="num">A</span>Mevcut hesabın denetimi</h2>
+
+      <p>
+        <span class="tag t-mea">ÖLÇÜLDÜ</span> — <code>dashboard/profil.png</code> ekran
+        görüntüsünden, 14 Ağustos 2026.
+      </p>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="k">Takipçi</div>
+          <div class="v">23</div>
+          <div class="n">Ocak 2024'ten beri</div>
+        </div>
+        <div class="kpi">
+          <div class="k">Takip edilen</div>
+          <div class="v">74</div>
+          <div class="n">oran 3,2:1</div>
+        </div>
+        <div class="kpi">
+          <div class="k">Gönderi</div>
+          <div class="v">29</div>
+          <div class="n">~19 ayda</div>
+        </div>
+        <div class="kpi">
+          <div class="k">Bio</div>
+          <div class="v">boş</div>
+          <div class="n">hiç metin yok</div>
+        </div>
+      </div>
+
+      <table>
+        <tr>
+          <th>Alan</th>
+          <th>Şu an</th>
+          <th>Sorun</th>
+        </tr>
+        <tr>
+          <td>Kullanıcı adı</td>
+          <td><code>@emredogancloud</code></td>
+          <td>"cloud" diyor; senin gerçek konumun AI uygulama geliştirme. Yanlış vaat.</td>
+        </tr>
+        <tr>
+          <td>Görünen ad</td>
+          <td>Emre Doğan</td>
+          <td>Ad alanı X'te aranabilir ve önerilerde görünür. Anahtar kelime yok.</td>
+        </tr>
+        <tr>
+          <td>Bio</td>
+          <td><strong>tamamen boş</strong></td>
+          <td>Profili açan biri ne yaptığını öğrenemiyor. Takip kararı burada verilir.</td>
+        </tr>
+        <tr>
+          <td>Profil fotoğrafı</td>
+          <td>Mavi "bulut" render'ı</td>
+          <td>
+            Yüz yok. Kişisel otorite hesabında jenerik görsel, kurumsal bir bot izlenimi verir.
+          </td>
+        </tr>
+        <tr>
+          <td>Banner</td>
+          <td><strong>Avatarla aynı görsel</strong></td>
+          <td>İki alan da aynı şeyi söylüyor; banner'ın taşıyabileceği bilgi boşa gidiyor.</td>
+        </tr>
+        <tr>
+          <td>Sabitlenmiş gönderi</td>
+          <td>Görünmüyor</td>
+          <td>Profili açanın okuyacağı ilk şey yok.</td>
+        </tr>
+        <tr>
+          <td>Bağlantı</td>
+          <td><code>emredogan.work</code></td>
+          <td>Var; iyi.</td>
+        </tr>
+      </table>
+
+      <div class="box bad">
+        <div class="h">Bu bir "büyüme" problemi değil, bir "başlangıç" problemi.</div>
+        <p>
+          23 takipçi ve boş bir bio ile hesap henüz açılmamış sayılır. Aşağıdaki her şey yerleşik
+          bir hesabı büyütmek için değil, <strong>hesabı doğru açmak</strong> için yazıldı. Sıralama
+          önemli: profil düzelmeden atılan iyi bir gönderi de 30–50 görüntülenme alır, çünkü sorun
+          gönderide değil.
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════ B -->
+      <h2 id="b"><span class="num">B</span>30–50 görüntülenme neden oluyor</h2>
+
+      <p>
+        "Algoritma seni sevmiyor" bir açıklama değil. X'in For You algoritması
+        <a href="https://github.com/xai-org/x-algorithm">açık kaynak</a>, ve mekanizma okunabiliyor.
+      </p>
+
+      <h3>1. Dağıtım takipçi havuzunda başlar <span class="tag t-ver">DOĞRULANMIŞ</span></h3>
+      <p>
+        <code>oon_scorer.rs</code>: ağ dışı (takip etmediğin birinden gelen) adaylar
+        <code>OON_WEIGHT_FACTOR</code> ile çarpılır ve bu katsayı <strong>1'den küçüktür</strong>.
+        Ağ içi adaylar çarpılmadan geçer. Yani bir gönderi önce takipçilerine gösterilir; oradan
+        dışarı çıkması için bu kesirli cezayı yenmesi gerekir.
+      </p>
+      <p>
+        <span class="tag t-inf">ÇIKARIM</span> 23 takipçinin belki üçte biri o pencerede aktifse, ağ
+        içi havuz <strong>7–8 kişi</strong>. Kalan 25–40 gösterim ağ dışından sızandır. 30–50 sayısı
+        tam olarak bu aritmetiğin sonucudur — içerik kalitesinden bağımsızdır.
+      </p>
+
+      <h3>
+        2. Küçük hesap, büyük hesabın atladığı kontrollere maruz kalır
+        <span class="tag t-ver">DOĞRULANMIŞ</span>
+      </h3>
+      <p>
+        13 Ağustos 2026 sürümüyle yayınlanan <code>abuse-enforcement-service</code> kurallarında,
+        her kontrol şu iki koşulla <em>atlanıyor</em>:
+      </p>
+      <pre>
+- id: high_follower_count
+  when: cred.follower_count &gt;= …        # gerçek eşik gizli
+  then: { kind: skip }
+
+- id: pagerank_skipped
+  when: cred.is_high || cred.score &gt;= 50.0
+  then: { kind: skip }</pre>
+      <p>
+        Yani takipçisi ve itibar skoru yüksek hesaplar bu denetimlerden muaf. 23 takipçili bir hesap
+        <strong>hepsine açık</strong>. Bu, "büyük hesaplar kayırılıyor" demek değil; küçük
+        hesaplarda yanlış pozitif riskinin daha yüksek olduğu anlamına geliyor.
+      </p>
+
+      <h3>
+        3. Yazım tarzının kendisi etiketlenebiliyor <span class="tag t-ver">DOĞRULANMIŞ</span>
+      </h3>
+      <p>Aynı dosyalarda, isimleri açıkça yazılmış üç etiket:</p>
+      <table>
+        <tr>
+          <th>Sınıflandırıcı</th>
+          <th>Uygulanan etiket</th>
+          <th class="num">Süre</th>
+        </tr>
+        <tr>
+          <td><code>llm_slop_user</code></td>
+          <td><code>SpamHighRecall</code> (hesap)</td>
+          <td class="num">30 gün</td>
+        </tr>
+        <tr>
+          <td><code>llm_slop_post</code></td>
+          <td><code>RiskyHighVizReply</code> (gönderi)</td>
+          <td class="num">30 gün</td>
+        </tr>
+        <tr>
+          <td><code>fast_reply_spam_post</code></td>
+          <td><code>SpamHighRecall</code> (gönderi)</td>
+          <td class="num">30 gün</td>
+        </tr>
+      </table>
+      <div class="box bad">
+        <div class="h">Bu üç satır senin stratejini doğrudan değiştiriyor.</div>
+        <p>
+          <strong>Yapay zekâ sesi çıkaran gönderi</strong> adlandırılmış bir risktir, üslup tercihi
+          değil. <strong>Hızlı ve seri reply atmak</strong> adlandırılmış bir risktir — yani "büyük
+          hesaplara erken reply at" tavsiyesi, tam da senin profilindeki bir hesap için en tehlikeli
+          taktiktir. Ceza 30 gün sürüyor ve <code>RiskyHighVizReply</code> özellikle reply
+          görünürlüğünü kısıyor.
+        </p>
+      </div>
+      <p>
+        <span class="tag t-inf">ÇIKARIM</span> Signal-Desk'in taslak üreticisi hype kelimelerini,
+        emojiyi, hashtag'i ve linki koddan siliyor. Bu bir stil kararı olarak başlamıştı; bu
+        kurallar yayınlandıktan sonra <strong>bir güvenlik kontrolü</strong>.
+      </p>
+
+      <h3>
+        4. Aynı yazardan üst üste gönderi bastırılıyor <span class="tag t-ver">DOĞRULANMIŞ</span>
+      </h3>
+      <p>
+        <code>author_diversity_scorer.rs</code> tek oturumda tekrar eden yazarı zayıflatır.
+        <span class="tag t-inf">ÇIKARIM</span> Günde 3–4'ten fazla gönderi kendi kendini yiyor. "Her
+        gün çok paylaş" tavsiyesi bu hesap için yanlıştır.
+      </p>
+
+      <h3>Buradan çıkışın gerçek yolu</h3>
+      <p>
+        Tek bir kaldıraç var ve dolaylı: <strong>ağ içi havuzu büyütmek</strong>. Çünkü ağ içi
+        çarpılmadan geçiyor. İlk birkaç yüz gerçek takipçi orantısız değerli — 23'ten 250'ye çıkmak
+        görüntülenmeyi kabaca on katına çıkarır ve bunun için algoritmayı yenmen gerekmez.
+      </p>
+      <ol>
+        <li>
+          <strong>Önce profili düzelt.</strong> Bio, banner, sabitlenmiş gönderi. Trafiğin
+          dönüşmediği bir profile trafik göndermek israftır.
+        </li>
+        <li>
+          <strong>Sonra ağ dışı vergiyi ödemeye değecek içerik üret.</strong> Ağ dışına çıkmanın
+          yolu, arkadaşının gönderisinden belirgin şekilde daha iyi olmaktır.
+        </li>
+        <li>
+          <strong>Reply'i seyrek ve nitelikli kullan.</strong> Seri reply <em>adlandırılmış</em> bir
+          risk; düşünülmüş tek bir reply değil.
+        </li>
+      </ol>
+
+      <!-- ══════════════════════════════════════════════════════════ C -->
+      <h2 id="c"><span class="num">C</span>Yeni sürümde ne değişti — 13 Ağustos 2026</h2>
+
+      <p>
+        <span class="tag t-ver">DOĞRULANMIŞ</span> — GitHub API, <code>pushed_at</code> =
+        <code>2026-08-13T17:23:57Z</code>, 28.620 yıldız.
+      </p>
+
+      <div class="box ok">
+        <div class="h">Bu, senin ilk ciddi gönderin için gerçek bir fırsat.</div>
+        <p>
+          xAI, For You algoritmasının yeni bir sürümünü <strong>dün</strong> yayınladı ve
+          <strong>300 dosya</strong> ekledi. Sürüm aralığı Ocak → Mayıs → Ağustos; yani yaklaşık üç
+          ayda bir. Bu, kaçırılması kolay ve teknik olarak doğrulanabilir bir olay — senin
+          konumlandırmanla birebir örtüşüyor.
+        </p>
+      </div>
+
+      <table>
+        <tr>
+          <th>Eklenen</th>
+          <th>Ne işe yarıyor</th>
+        </tr>
+        <tr>
+          <td><code>abuse-enforcement-service/</code></td>
+          <td>
+            Model skorlarına göre hesabı/gönderiyi etiketleyen, kısıtlayan veya askıya alan servis.
+            İlk kez yayınlandı.
+          </td>
+        </tr>
+        <tr>
+          <td><code>agatha/</code></td>
+          <td>
+            Bir hesabı, <em>başkalarının ona nasıl tepki verdiğinden</em> etiketleyen toplu işler:
+            blok, şikâyet ve spam bildirimlerinin beğeniye oranı.
+          </td>
+        </tr>
+        <tr>
+          <td><code>botmaker/</code>, <code>scarecrow/</code></td>
+          <td>Etiket üreten kural sistemleri.</td>
+        </tr>
+        <tr>
+          <td><code>user-cred-v2/</code>, <code>bdsm/</code></td>
+          <td>Hesabı çeşitli boyutlarda skorlayan modeller.</td>
+        </tr>
+        <tr>
+          <td><code>clip/</code>, <code>media-model-proxy/</code></td>
+          <td>Görsel ve videoyu inceleyen modeller.</td>
+        </tr>
+      </table>
+
+      <p>
+        <code>agatha/</code> tanımı önemli:
+        <strong>blok ve şikâyetlerin beğeniye oranı</strong> hesap seviyesinde bir etiket girdisi.
+        Yani birkaç kişiyi rahatsız eden bir gönderi, sadece o gönderiyi değil hesabı
+        etkileyebiliyor. <span class="tag t-inf">ÇIKARIM</span> Provokatif "hot take" stratejisi, bu
+        hesap büyüklüğünde asimetrik risk taşıyor.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════ D -->
+      <h2 id="d"><span class="num">D</span>İlk 30 gün</h2>
+
+      <p>
+        <span class="tag t-rec">ÖNERİ</span> Sıra önemli. 1. hafta bitmeden gönderi atmaya başlama.
+      </p>
+
+      <h4>Hafta 0 — profil (1 saat, gönderiden önce)</h4>
+      <ul>
+        <li>
+          Bio yaz, banner değiştir, avatarı yüz fotoğrafıyla değiştir. <a href="#e">Bölüm E</a>.
+        </li>
+        <li>Görünen adı <code>Emre Doğan</code> → <code>Emre Doğan | AI apps</code> yap.</li>
+      </ul>
+
+      <h4>Hafta 1 — sabitlenmiş gönderi + 3 teknik gönderi</h4>
+      <ul>
+        <li>
+          <strong>Sabitlenmiş gönderi:</strong> ne yaptığını ve neyi paylaşacağını söyleyen tek
+          gönderi. Kişisel hikâye değil; bir vaat. "Ne bulursam paylaşırım" değil, "şunu yapıyorum,
+          şunları yazacağım".
+        </li>
+        <li>
+          Haftada 3 gönderi. Her biri <strong>tek bir teknik gözlem</strong>. Signal-Desk'in
+          <em>ŞİMDİ PAYLAŞ</em> veya <em>KENDİ TESTİN</em> dediği olaylardan seç.
+        </li>
+      </ul>
+
+      <h4>Hafta 2–4 — ritim</h4>
+      <ul>
+        <li>Günde en fazla 2 gönderi (<code>author_diversity_scorer</code> nedeniyle).</li>
+        <li>Günde en fazla 2–3 <strong>düşünülmüş</strong> reply. Seri reply yok.</li>
+        <li>Haftada 1 "kendi testim" gönderisi — asıl fark yaratan budur.</li>
+      </ul>
+
+      <div class="box warn">
+        <div class="h">Ölçeceğin şey takipçi sayısı değil.</div>
+        <p>
+          İlk 30 gün için doğru metrik <strong>profil ziyareti</strong> ve
+          <strong>gönderi başına ağ dışı görüntülenme</strong>. Takipçi bunların sonucudur, hedefi
+          değil. X Analytics'te ikisi de görünüyor ve API gerektirmiyor.
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════ E -->
+      <h2 id="e"><span class="num">E</span>Profil optimizasyonu</h2>
+
+      <h4>Bio <span class="tag t-rec">ÖNERİ</span></h4>
+      <p>
+        İngilizce, çünkü hedef kitle global. Üç şey söylemeli: ne inşa ediyorsun, hangi
+        teknolojiyle, burada ne paylaşacaksın.
+      </p>
+      <pre>
+Building AI-backed apps solo. Flutter + Supabase + Anthropic.
+I test the models I write about — results, not press releases.
+🇹🇷 Adana</pre>
+      <p>
+        Neden bu işe yarar: ilk satır <em>ne</em>, ikinci satır
+        <em>neden seni takip etmeli</em> (test ediyorsun, tekrarlamıyorsun), üçüncüsü insani bir
+        tutamak. "Passionate about AI" gibi bir cümle yok — çünkü hiçbir şey söylemez.
+      </p>
+
+      <h4>Görünen ad <span class="tag t-rec">ÖNERİ</span></h4>
+      <p>
+        <code>Emre Doğan | AI apps</code> — ad alanı aramada ve önerilerde görünür; boş bırakmak
+        ücretsiz bir sinyali harcamaktır.
+      </p>
+
+      <h4>Avatar <span class="tag t-rec">ÖNERİ</span></h4>
+      <p>
+        <strong>Yüz fotoğrafı.</strong> Kişisel otorite hesabında jenerik bir render, hesabı
+        kurumsal bir yayın botundan ayırt edilemez kılıyor — ve bu, insanların takip etmeme
+        sebebidir. Basit, iyi ışıklı, sade arka planlı bir portre yeterli.
+      </p>
+
+      <h4>Banner <span class="tag t-rec">ÖNERİ</span></h4>
+      <p>
+        Avatarla aynı görsel olmamalı. Banner'ın taşıyacağı tek iş var:
+        <strong>ne inşa ettiğini göstermek</strong>. Uygulamanın gerçek bir ekran görüntüsü, üstüne
+        tek satır metin. Soyut bulut/ağ görselleri bilgi taşımaz.
+      </p>
+
+      <h4>Sabitlenmiş gönderi <span class="tag t-rec">ÖNERİ</span></h4>
+      <p>
+        Profili açan kişi 3 saniyede şu soruya cevap almalı: "bu hesabı takip edersem ne alırım?"
+        Sabitlenmiş gönderi bunu somut olarak cevaplamalı — tercihen inşa ettiğin bir şeyin ekran
+        görüntüsü veya kısa videosuyla.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════ F -->
+      <h2 id="f"><span class="num">F</span>İçerik formülleri</h2>
+
+      <p>
+        Her formülün ortak kuralı: <strong>duyuruyu tekrarlama</strong>. Duyuruyu zaten herkes
+        görüyor; senin eklediğin şey ne?
+      </p>
+
+      <h3>1. Kendi testim <span class="tag t-rec">ÖNERİ</span></h3>
+      <pre>
+[Model/araç] [X] iddia ediyor.
+Aynı görevi [önceki sürüm] ile çalıştırdım.
+Sonuç: [gerçek çıktı]
+Beklemediğim kısım: [sürpriz]</pre>
+      <p>
+        En güçlü format, çünkü tekrarlanamaz. Signal-Desk bunu <em>KENDİ TESTİN</em> olarak
+        işaretler ve yalnızca gerçekten test edilebilir olaylarda gösterir.
+      </p>
+
+      <h3>2. Öncesi / sonrası</h3>
+      <pre>
+Önce: [eski davranış]
+Şimdi: [yeni davranış]
+Bu, [pratik sonuç] anlamına geliyor.</pre>
+
+      <h3>3. Sessiz değişikliği yakalama</h3>
+      <p>
+        Release notes'ta gömülü, kimsenin yazmadığı davranış değişikliği. Signal-Desk'in GitHub
+        release akışlarını 0,5–6 dakikada yakalaması tam olarak bunun içindir.
+      </p>
+
+      <h3>4. Yanlış anlaşılmayı düzeltme</h3>
+      <p>
+        Yaygın bir teknik yanlış inancı, kaynak göstererek düzeltmek. Riskli ama otorite kurar —
+        kaynak olmadan yapma.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════ G -->
+      <h2 id="g"><span class="num">G</span>Reply ve alıntı stratejisi</h2>
+
+      <div class="box bad">
+        <div class="h">Yaygın tavsiyenin tersini yapıyoruz, ve gerekçesi kodda.</div>
+        <p>
+          <code>fast_reply_spam_post</code> → <code>SpamHighRecall</code>, 30 gün.
+          <code>llm_slop_post</code> → <code>RiskyHighVizReply</code>, 30 gün. Ve
+          <code>high_follower_count</code> / <code>pagerank_skipped</code> muafiyetleri sende yok.
+          "Büyük hesaplara hızlı reply at" taktiği, senin hesap profilinde en yüksek riskli
+          taktiktir.
+        </p>
+      </div>
+
+      <table>
+        <tr>
+          <th>Durum</th>
+          <th>Yapılacak</th>
+        </tr>
+        <tr>
+          <td>Ekleyecek somut bir şeyin var (test, sayı, düzeltme)</td>
+          <td class="do">Reply at — günde 2–3'ü geçme</td>
+        </tr>
+        <tr>
+          <td>Sadece görünürlük için</td>
+          <td class="dont">Atma. Adlandırılmış risk.</td>
+        </tr>
+        <tr>
+          <td>Kendi analizin duyurudan bağımsız durabiliyor</td>
+          <td class="do">Alıntı gönderisi</td>
+        </tr>
+        <tr>
+          <td>Konuşma henüz oluşmamış</td>
+          <td class="do">Bağımsız gönderi</td>
+        </tr>
+      </table>
+
+      <p>
+        <strong>Alıntı gönderisi</strong> senin durumunda reply'den genellikle daha iyi: mevcut
+        konuşmayı dağıtım olarak kullanır ama gönderi <em>senin</em> profilinde durur ve orijinal
+        katkı taşır.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════ H -->
+      <h2 id="h"><span class="num">H</span>Görsel ve video</h2>
+
+      <p>
+        <span class="tag t-inf">ÇIKARIM</span> <code>weighted_scorer.rs</code>'de
+        <code>photo_expand</code> ve <code>vqv</code> (video kalite görüntüleme) pozitif terimler
+        olarak var — yani medyayla etkileşim skora giriyor. Katsayılar (<code>params.rs</code>)
+        yayınlanmadı, dolayısıyla "görsel eklersen N kat artar" diyen herkes tahmin yürütüyor.
+      </p>
+
+      <table>
+        <tr>
+          <th>Olay tipi</th>
+          <th>Önerilen medya</th>
+          <th>Neden</th>
+        </tr>
+        <tr>
+          <td>Kendi testin</td>
+          <td>Ekran kaydı, 12–20 sn</td>
+          <td>Gerçekten çalıştığını hareket kanıtlar</td>
+        </tr>
+        <tr>
+          <td>Öncesi/sonrası sayısal</td>
+          <td>Basit karşılaştırma grafiği</td>
+          <td>Tek bakışta okunur</td>
+        </tr>
+        <tr>
+          <td>Release notes değişikliği</td>
+          <td>Ekran görüntüsü, kırpılmış</td>
+          <td>İddiayı iddia olmaktan çıkarır</td>
+        </tr>
+        <tr>
+          <td>Yorum / analiz</td>
+          <td class="dont">Medya yok</td>
+          <td>Dekoratif görsel güvenilirliğe zarar verir</td>
+        </tr>
+      </table>
+
+      <div class="box">
+        <div class="h">GPT görsel promptu — Signal-Desk üretiyor, ama kısıtlı</div>
+        <p>
+          Prompt <strong>modelin yazdığı bir metin değil</strong>; doğrulanmış alanlardan kodda
+          birleştiriliyor ve şu negatif kısıtları taşıyor: logo yok, analizde geçmeyen sayı yok,
+          sahte arayüz yok, insan yüzü yok. Sebep basit — yanlış bir cümle gözle görülür,
+          <strong>yanlış bir grafik görülmez</strong>. Gerçek bir öncesi/sonrası yoksa prompt hiç
+          üretilmiyor.
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════ I -->
+      <h2 id="i"><span class="num">I</span>Signal-Desk ne kadar hızlı yakalıyor</h2>
+
+      <p>
+        <span class="tag t-mea">ÖLÇÜLDÜ</span> — canlı üretim veritabanı, 14 Ağustos 2026. Her
+        kaynağın <em>ilk</em> çekimi hariç tutuldu: ilk çekim arşivi toplu indirir ve ortalamayı
+        bozar. n = 399.
+      </p>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="k">Tespit p50</div>
+          <div class="v">36 dk</div>
+          <div class="n">yayın → yakalama</div>
+        </div>
+        <div class="kpi">
+          <div class="k">GitHub / status</div>
+          <div class="v">0,5–6 dk</div>
+          <div class="n">en iyi kaynaklar</div>
+        </div>
+        <div class="kpi">
+          <div class="k">İşleme p50</div>
+          <div class="v">6,7 dk</div>
+          <div class="n">p90 14,5 · max 17,5</div>
+        </div>
+        <div class="kpi">
+          <div class="k">Aktif kaynak</div>
+          <div class="v">60</div>
+          <div class="n">P1: 7 · P2: 24</div>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <table>
+          <tr>
+            <th>Aşama</th>
+            <th>Ölçüm</th>
+            <th class="num">Değer</th>
+          </tr>
+          <tr>
+            <td>Yayın → tespit (genel)</td>
+            <td>p50 / ortalama</td>
+            <td class="num">36 dk / 59 dk</td>
+          </tr>
+          <tr>
+            <td>Yayın → tespit (GitHub release)</td>
+            <td><code>gh-llama-cpp</code>, <code>gh-cline</code></td>
+            <td class="num">2,2–3 dk</td>
+          </tr>
+          <tr>
+            <td>Yayın → tespit (status sayfaları)</td>
+            <td><code>status-cloudflare/supabase/vercel</code></td>
+            <td class="num">2,6–5,8 dk</td>
+          </tr>
+          <tr>
+            <td>Yayın → tespit (arXiv)</td>
+            <td>60 dk poll aralığı</td>
+            <td class="num">36 dk</td>
+          </tr>
+          <tr>
+            <td>Tespit → skorlanmış</td>
+            <td>p50 / p90 / max</td>
+            <td class="num">6,7 / 14,5 / 17,5 dk</td>
+          </tr>
+          <tr>
+            <td>Boru hattı döngüsü</td>
+            <td>ölçülen aralık</td>
+            <td class="num">19,6–20,9 dk</td>
+          </tr>
+          <tr>
+            <td>Dashboard'a düşme</td>
+            <td>sunucu render, önbellek yok</td>
+            <td class="num">&lt; 1 sn</td>
+          </tr>
+          <tr>
+            <td>Telefon bildirimi</td>
+            <td>ntfy teslimi doğrulandı</td>
+            <td class="num">HTTP 200</td>
+          </tr>
+          <tr>
+            <td>Anthropic/OpenAI/Gemini duyurusu</td>
+            <td><span class="tag t-nm">ÖLÇÜLMEDİ</span></td>
+            <td class="num">—</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="box warn">
+        <div class="h">Neden "ÖLÇÜLMEDİ" yazıyor</div>
+        <p>
+          Gözlem penceresinde (~12 saat) Anthropic, OpenAI veya Google DeepMind bir duyuru
+          yayınlamadı. Bu kaynaklar 5 dakikalık aralıkla izleniyor, ama
+          <em>gerçekleşmiş bir olay üzerinde</em> ölçülmedikçe sayı uydurmak olur. İlk büyük
+          duyuruda bu satır dolacak.
+        </p>
+      </div>
+
+      <h3>Baskın gecikme kalemi işleme, tespit değil</h3>
+      <p>
+        Tier-1 bir duyuru 2 dakikada yakalanıyor, ama sabit 20 dakikalık boru hattı döngüsü üzerine
+        <strong>17,5 dakikaya kadar</strong> ekliyordu. Bu yüzden
+        <strong>hızlı yol</strong> eklendi: supervisor her 60 saniyede bir indeksli tek bir soru
+        soruyor — "son çalıştırmadan beri Öncelik-1 bir kaynak yayın yaptı mı?" Evetse boru hattı
+        hemen çalışıyor. Döngüyü kısaltmak yanlış çözümdü: tam bir geçiş bu makinede 413 saniye CPU
+        harcıyor.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════ J -->
+      <h2 id="j"><span class="num">J</span>X API gerçekte ne görebiliyor</h2>
+
+      <div class="box bad">
+        <div class="h">
+          Signal-Desk X'i izlemiyor. İzleyemez de — teknik değil, ekonomik sebeple.
+        </div>
+      </div>
+
+      <p>
+        <span class="tag t-ver">DOĞRULANMIŞ</span> — X API Şubat 2026'da kullandıkça-öde modeline
+        geçti, <strong>ücretsiz katman yok</strong>.
+      </p>
+
+      <table>
+        <tr>
+          <th>İşlem</th>
+          <th class="num">Fiyat</th>
+        </tr>
+        <tr>
+          <td>Gönderi okuma</td>
+          <td class="num">$0,005</td>
+        </tr>
+        <tr>
+          <td>Kullanıcı okuma / trendler</td>
+          <td class="num">$0,010</td>
+        </tr>
+        <tr>
+          <td>Kendi hesabının verisi (owned read)</td>
+          <td class="num">$0,001</td>
+        </tr>
+        <tr>
+          <td>Gönderi oluşturma</td>
+          <td class="num">$0,015</td>
+        </tr>
+        <tr>
+          <td><strong>İçinde link olan gönderi</strong></td>
+          <td class="num"><strong>$0,200</strong></td>
+        </tr>
+      </table>
+
+      <p>
+        <strong>50 hesap × günde ~20 gönderi = günde 1.000 okuma ≈ ayda $150.</strong> Üstelik aynı
+        şirketler bu bilgiyi RSS, GitHub ve status sayfalarında <em>ücretsiz</em> ve çoğu zaman
+        <em>daha erken</em> yayınlıyor.
+      </p>
+
+      <h4>Signal-Desk'in gerçekten izleyebildiği</h4>
+      <ul>
+        <li>Resmî bloglar, newsroom'lar, RSS akışları</li>
+        <li>GitHub release ve commit akışları (<code>.atom</code>, token gerektirmez)</li>
+        <li>Status sayfaları</li>
+        <li>arXiv, HN, Lobsters, Reddit</li>
+      </ul>
+
+      <h4>Signal-Desk'in izleyemediği <span class="tag t-ver">DOĞRULANMIŞ</span></h4>
+      <ul>
+        <li><strong>X'teki gönderiler.</strong> Hiçbir hesabın timeline'ı izlenmiyor.</li>
+        <li>X'te oluşan tartışmalar, trendler, reply zincirleri.</li>
+        <li>Bir kişinin X'te söylediği, başka yerde yayınlamadığı şey.</li>
+      </ul>
+
+      <p>
+        <span class="tag t-rec">ÖNERİ</span> X'te takip etmek istediğin kişiler için
+        <strong>X Lists</strong> kullan ve günde bir kez kendin bak. Bu bir yazılım işi değil, 5
+        dakikalık bir insan işi — ve ayda $150 etmiyor. X API'yi yalnızca kendi hesabının analitiği
+        için aç (~$3/ay).
+      </p>
+
+      <div class="box warn">
+        <div class="h">Mevcut durum: X entegrasyonu kapalı</div>
+        <p>
+          <code>X_ACCESS_TOKEN</code> eksik kopyalanmış — X 40 karakterlik bir sonek üretiyor,
+          mevcut değerde 30 karakter var. Sistem bunu artık kendisi tespit ediyor ve rozeti otomatik
+          olarak MOCK'a düşürüyor. Düzeltmek için: X geliştirici konsolu → Keys and tokens → Access
+          Token and Secret → Regenerate, sonra <code>pnpm x:verify</code>. Bu düzeldiğinde
+          <strong>izleme</strong> değil, yalnızca <strong>kendi hesap analitiğin</strong> açılır.
+        </p>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════ K -->
+      <h2 id="k"><span class="num">K</span>İzlenecek kaynaklar</h2>
+
+      <p><span class="tag t-mea">ÖLÇÜLDÜ</span> — 60 aktif kaynak, canlı kayıt defterinden.</p>
+
+      <table>
+        <tr>
+          <th>Kademe</th>
+          <th class="num">Adet</th>
+          <th class="num">Poll</th>
+          <th>Ne için</th>
+        </tr>
+        <tr>
+          <td><strong>Tier 1</strong> — kırılma anı</td>
+          <td class="num">7</td>
+          <td class="num">5–15 dk</td>
+          <td>
+            OpenAI news, status-openai, <code>gh-x-algorithm</code>, Anthropic akışları. Hızlı yol
+            bunları tetikler.
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Tier 2</strong> — yüksek değer</td>
+          <td class="num">24</td>
+          <td class="num">15 dk</td>
+          <td>
+            GitHub release akışları (llama.cpp, claude-code, next.js), status sayfaları, Anthropic
+            SDK
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Tier 3</strong> — bağlam</td>
+          <td class="num">25</td>
+          <td class="num">60 dk</td>
+          <td>arXiv, HN, Lobsters, TechCrunch, The Verge, uzman blogları</td>
+        </tr>
+        <tr>
+          <td><strong>Tier 4</strong> — keşif</td>
+          <td class="num">4</td>
+          <td class="num">360 dk</td>
+          <td>Yavaş hareket eden endüstri kaynakları</td>
+        </tr>
+      </table>
+
+      <p>
+        <span class="tag t-rec">ÖNERİ</span> Kritik şirketler tek kaynağa bağlanmamalı. Anthropic
+        için blog + GitHub + status ayrı ayrı izleniyor; biri sessiz kalırsa diğeri yakalıyor.
+        Kaynak ölümü bu sistemin en olası gerçek arızasıdır ve panelde ayrı bir göstergesi vardır.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════ L -->
+      <h2 id="l"><span class="num">L</span>Aylık maliyet</h2>
+
+      <p>
+        <span class="tag t-mea">ÖLÇÜLDÜ</span> — ölçülen birim maliyetler canlı
+        <code>spend_ledger</code> tablosundan: 181 çağrı, toplam $1,8036.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <tr>
+            <th>Kalem</th>
+            <th>Yapılandırma</th>
+            <th class="num">Minimum</th>
+            <th class="num">Beklenen</th>
+            <th class="num">Maksimum</th>
+          </tr>
+          <tr>
+            <td>Fly.io makine</td>
+            <td>shared-cpu-2x, 2 GB, 7/24</td>
+            <td class="num">$9,08</td>
+            <td class="num">$9,08</td>
+            <td class="num">$9,08</td>
+          </tr>
+          <tr>
+            <td>Fly.io volume</td>
+            <td>3 GB, şifreli, günlük snapshot</td>
+            <td class="num">$0,45</td>
+            <td class="num">$0,45</td>
+            <td class="num">$0,45</td>
+          </tr>
+          <tr>
+            <td>Fly.io egress</td>
+            <td>çoğu trafik gelen yönde (ücretsiz)</td>
+            <td class="num">~$0,02</td>
+            <td class="num">~$0,02</td>
+            <td class="num">~$0,10</td>
+          </tr>
+          <tr>
+            <td>Anthropic</td>
+            <td>Haiku $0,0042/çağrı · Opus $0,109/çağrı</td>
+            <td class="num">$0</td>
+            <td class="num">$15–35</td>
+            <td class="num"><strong>$60,00</strong></td>
+          </tr>
+          <tr>
+            <td>X API</td>
+            <td>entegrasyon kapalı; izleme yapılmıyor</td>
+            <td class="num">$0</td>
+            <td class="num">$0</td>
+            <td class="num">~$3</td>
+          </tr>
+          <tr>
+            <td>ntfy.sh</td>
+            <td>public topic, hesap gerektirmez</td>
+            <td class="num">$0</td>
+            <td class="num">$0</td>
+            <td class="num">$0</td>
+          </tr>
+          <tr>
+            <td>Depolama</td>
+            <td>veritabanı volume içinde</td>
+            <td class="num">$0</td>
+            <td class="num">$0</td>
+            <td class="num">$0</td>
+          </tr>
+          <tr>
+            <th>Toplam</th>
+            <th></th>
+            <th class="num">$9,55</th>
+            <th class="num">$25–45</th>
+            <th class="num">$72,63</th>
+          </tr>
+        </table>
+      </div>
+
+      <p>
+        <strong>Maksimum bir tahmin değil, bir tavan.</strong>
+        <code>AI_DAILY_BUDGET_USD=2.00</code> bütçe koruyucusu tarafından zorlanıyor: aşıldığında
+        derin analiz durur, ama toplama, kümeleme, skorlama ve uyarılar çalışmaya devam eder. Yani
+        en kötü senaryoda sistem susmuyor, sadece pahalı katman bekliyor.
+      </p>
+
+      <p>
+        <span class="tag t-inf">ÇIKARIM</span> "Beklenen" aralığı geniş, çünkü tek bir otonom gün
+        henüz tamamlanmadı. Kesin olan: kural kapısı olayların %98,5'ini LLM'e ulaşmadan eliyor — bu
+        olmadan aynı hacim tek başına triyajda ayda birkaç yüz dolar ederdi.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════ M -->
+      <h2 id="m"><span class="num">M</span>Yapılmayacaklar</h2>
+
+      <table>
+        <tr>
+          <th>Yapma</th>
+          <th>Neden</th>
+        </tr>
+        <tr>
+          <td class="dont">Engagement pod, karşılıklı beğeni grubu</td>
+          <td>
+            <code>anchor_campaign_suspend</code> → kalıcı askıya alma,
+            <code>PlatformManipulation</code>. Kodda yazıyor.
+          </td>
+        </tr>
+        <tr>
+          <td class="dont">Takipçi/beğeni satın alma</td>
+          <td>Aynı kural ailesi.</td>
+        </tr>
+        <tr>
+          <td class="dont">Otomatik reply botu</td>
+          <td><code>fast_reply_spam_post</code> → 30 gün <code>SpamHighRecall</code>.</td>
+        </tr>
+        <tr>
+          <td class="dont">Gönderiye link koyma (çoğu durumda)</td>
+          <td>İki bağımsız sebep: API'de $0,200 (13 kat) ve ağ dışı dağıtımda dezavantaj.</td>
+        </tr>
+        <tr>
+          <td class="dont">Yapay zekâ sesi çıkaran metin</td>
+          <td><code>llm_slop_post</code> → <code>RiskyHighVizReply</code>, 30 gün.</td>
+        </tr>
+        <tr>
+          <td class="dont">Günde 4+ gönderi</td>
+          <td><code>author_diversity_scorer</code> aynı yazarı bastırır.</td>
+        </tr>
+        <tr>
+          <td class="dont">Test etmediğin şey için "I tested this"</td>
+          <td>
+            Tek gerçek varlığın güvenilirlik. Signal-Desk test edilebilir olmayan olaylarda bu
+            formatı hiç önermiyor.
+          </td>
+        </tr>
+        <tr>
+          <td class="dont">X scraper / Nitter</td>
+          <td>ToS ihlali; tüm operasyonun dayandığı hesabı riske atar.</td>
+        </tr>
+      </table>
+
+      <!-- ══════════════════════════════════════════════════════════ N -->
+      <h2 id="n"><span class="num">N</span>Gerçekçi beklentiler</h2>
+
+      <div class="box warn">
+        <div class="h">Bu bölüm bilerek iddiasız.</div>
+        <p>
+          Büyüme rakamı vaat eden herkes tahmin yürütüyor: <code>params.rs</code> — gerçek
+          katsayılar — yayınlanmadı. Aşağıdakiler <span class="tag t-inf">ÇIKARIM</span>,
+          mekanizmadan türetildi, ölçüm değil.
+        </p>
+      </div>
+
+      <ul>
+        <li>
+          <strong>Profil düzeltmesi tek başına</strong> görüntülenmeyi artırmaz; gelen ziyaretçinin
+          takibe dönüşmesini artırır. Etkisi ancak trafik geldiğinde görünür.
+        </li>
+        <li>
+          <strong>İlk 100 gerçek takipçi en yavaş kısımdır</strong> ve orantısız değerlidir, çünkü
+          ağ içi havuz çarpılmadan geçer.
+        </li>
+        <li>
+          <strong>Tek bir iyi "kendi testim" gönderisi</strong>, otuz yorum gönderisinden fazla iş
+          görür.
+        </li>
+        <li>
+          Haftada 3 nitelikli gönderi + günde 2 düşünülmüş reply, 30 günde
+          <span class="tag t-inf">ÇIKARIM</span> 23 → 100–250 takipçi aralığında bir sonuç
+          verebilir. Garanti değil; mekanizmadan makul bir beklenti.
+        </li>
+      </ul>
+
+      <!-- ══════════════════════════════════════════════════════════ O -->
+      <h2 id="o"><span class="num">O</span>Kaynaklar</h2>
+
+      <ol>
+        <li>
+          <a href="https://github.com/xai-org/x-algorithm">github.com/xai-org/x-algorithm</a> — For
+          You algoritmasının kaynak kodu. <code>pushed_at 2026-08-13T17:23:57Z</code>, 28.620
+          yıldız, GitHub API ile doğrulandı.
+        </li>
+        <li>
+          <code>abuse-enforcement-service/service-lib/rules/enforcement_user.yaml</code> ve
+          <code>enforcement_post.yaml</code> — <code>llm_slop_user</code>,
+          <code>llm_slop_post</code>, <code>fast_reply_spam_post</code>,
+          <code>high_follower_count</code>, <code>pagerank_skipped</code> kuralları. 13 Ağustos 2026
+          sürümünde ilk kez yayınlandı.
+        </li>
+        <li><code>oon_scorer.rs</code> — <code>OON_WEIGHT_FACTOR</code> &lt; 1.</li>
+        <li><code>author_diversity_scorer.rs</code> — tekrar eden yazarın bastırılması.</li>
+        <li>
+          <code>weighted_scorer.rs</code> — ~15 pozitif, 4 negatif terim.
+          <strong>Bookmark terimi yoktur</strong> — "bookmark en yüksek ağırlıklı sinyaldir" iddiası
+          yayınlanmış kodda karşılığı olmayan bir şehir efsanesidir.
+        </li>
+        <li>
+          <a href="https://docs.x.com/x-api/getting-started/pricing"
+            >docs.x.com/x-api/getting-started/pricing</a
+          >
+          — kullandıkça öde fiyatlandırması, Şubat 2026.
+        </li>
+        <li>
+          Signal-Desk canlı üretim veritabanı, 14 Ağustos 2026 — gecikme ve maliyet ölçümleri.
+        </li>
+      </ol>
+
+      <hr />
+      <p style="color: var(--fg3); font-size: 12.5px">
+        Signal-Desk · Bu rapor otomatik üretilmedi; ölçümler canlı sistemden, kod alıntıları
+        birincil kaynaktan alındı. Etiketlenmemiş hiçbir iddia yoktur.
+      </p>
+    </div>
+  </body>
+</html>
