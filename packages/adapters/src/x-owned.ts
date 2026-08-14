@@ -263,7 +263,7 @@ export async function xGet<T>(path: string, options: XGetOptions): Promise<XResp
  * badge that is true and one that is merely optimistic. Re-exported here so the client
  * and its tests keep one import path.
  */
-export { X_CREDENTIAL_SHAPE, credentialShapeProblems } from '@signal-desk/shared';
+export { credentialShapeProblems } from '@signal-desk/shared';
 
 export type XAccount = {
   readonly id: string;

@@ -18,8 +18,11 @@ primary_region = 'fra'
   DATABASE_URL = 'file:/data/signal-desk.db'
   DATA_MODE = 'LIVE'
   AI_MODE = 'LIVE'
-  # MOCK until X_ACCESS_TOKEN is re-copied at full length — see ENV-HANDBOOK §4a.
-  # LIVE here would put a badge on the dashboard claiming an integration that 401s.
+  # MOCK because OAuth 1.0a user-context is not provisioned for this app — verified by
+  # isolating the legs: POST /oauth/request_token signs with the consumer key/secret
+  # ALONE and still returns 401, while an app-only Bearer returns 403 "Unsupported
+  # Authentication". The access token was never the problem; an earlier note here
+  # blamed its length, which X does not document and which was wrong.
   X_MODE = 'MOCK'
   X_ENABLE_POSTING = 'false'
   LOG_LEVEL = 'info'

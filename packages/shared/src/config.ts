@@ -40,35 +40,38 @@ const booleanish = z.preprocess((v) => {
 }, z.boolean());
 
 /**
- * The shapes X's key generator actually produces.
+ * Structural problems that make an X credential set impossible as written.
  *
- * ### Why a length check earns its place — 2026-08-14
+ * ### Corrected 2026-08-14 — I was wrong, and the wrongness had teeth
  *
- * The first live run returned `401 Unauthorized`, which is the same body for a bad
- * signature, a revoked token, an unenrolled app, and a mistyped key. Eliminating the
- * signature took a published test vector; eliminating the app took an app-only bearer
- * call that returned `403 Unsupported Authentication` (i.e. *authenticated*, wrong
- * auth type for the endpoint). What was left was the credentials — and the access
- * token turned out to carry a **30-character suffix where X issues 40**. It had been
- * copied short, twice, into two different variable names.
+ * This function used to assert exact lengths: API key 25, secret 50, access-token
+ * suffix 40, token secret 45. Those numbers came from a **worked example in X's 2011
+ * signature documentation**, not from any specification. X's current credential
+ * documentation states **no lengths at all** — verified by reading it.
  *
- * That cost six metered requests to discover something that is free to check. A
- * 50-character access token is not a plausible token; it is a truncated one, and the
- * only correct response is to refuse to send and say which field is wrong.
+ * The operator's account repeatedly produced a 30-character access-token suffix. I
+ * called that a truncated paste. It was not: `X_ACCESS_TOKEN` is 19 numeric digits, a
+ * hyphen, and 30 characters, consistently, across regenerations.
  *
- * Lengths are asserted, not the alphabet: X has changed the character set of these
- * values before and a strict pattern would reject a valid future credential. Length is
- * the part that catches the real failure — a partial paste — without guessing.
+ * The damage was not the wrong belief, it was the **hard gate built on it** — the
+ * `x:verify` CLI refused to send, so the one thing that could have corrected me was
+ * the thing the check prevented. A guess that blocks its own falsification is worse
+ * than no check.
+ *
+ * ### What actually fails, established by isolating the legs
+ *
+ * `POST /oauth/request_token` signs with the **consumer key and secret only** — the
+ * access token is not involved. It returns `401 code 32`. Meanwhile an app-only Bearer
+ * token returns `403 Unsupported Authentication`, which means the app is recognised.
+ *
+ * So the access token was never the problem. **OAuth 1.0a user-context is not
+ * provisioned for this app**, which in the X developer portal means "User
+ * authentication settings" has not been set up. Length was a red herring throughout.
+ *
+ * What survives here is only what is structurally impossible rather than merely
+ * unfamiliar: an empty value, or an access token that is not `{numeric id}-{something}`.
+ * Everything else is X's business, and the API is the only honest judge.
  */
-export const X_CREDENTIAL_SHAPE = {
-  apiKey: 25,
-  apiSecret: 50,
-  /** `{user_id}-{40 chars}` — the suffix is the part that gets cut off. */
-  accessTokenSuffix: 40,
-  accessTokenSecret: 45,
-} as const;
-
-/** Human-readable problems with the credential *shapes*. Empty means "worth sending". */
 export function credentialShapeProblems(credentials: {
   readonly apiKey: string | undefined;
   readonly apiSecret: string | undefined;
@@ -77,42 +80,26 @@ export function credentialShapeProblems(credentials: {
 }): string[] {
   const problems: string[] = [];
 
-  const check = (name: string, value: string, expected: number): void => {
-    if (value === '') problems.push(`${name} is empty`);
-    else if (value.length !== expected) {
-      problems.push(
-        `${name} is ${value.length} characters; X issues ${expected}` +
-          (value.length < expected ? ' — this looks like a partial paste' : ''),
-      );
+  const present = (name: string, value: string | undefined): boolean => {
+    if (value === undefined || value.trim() === '') {
+      problems.push(`${name} is empty`);
+      return false;
     }
+    return true;
   };
 
-  check('X_API_KEY', credentials.apiKey ?? '', X_CREDENTIAL_SHAPE.apiKey);
-  check('X_API_SECRET', credentials.apiSecret ?? '', X_CREDENTIAL_SHAPE.apiSecret);
-  check(
-    'X_ACCESS_TOKEN_SECRET',
-    credentials.accessTokenSecret ?? '',
-    X_CREDENTIAL_SHAPE.accessTokenSecret,
-  );
+  present('X_API_KEY', credentials.apiKey);
+  present('X_API_SECRET', credentials.apiSecret);
+  present('X_ACCESS_TOKEN_SECRET', credentials.accessTokenSecret);
 
-  const accessToken = credentials.accessToken ?? '';
-  const [userId, ...rest] = accessToken.split('-');
-  const suffix = rest.join('-');
-  if (accessToken === '') {
-    problems.push('X_ACCESS_TOKEN is empty');
-  } else if (rest.length === 0) {
-    problems.push('X_ACCESS_TOKEN has no "-" — the form is {user_id}-{40 characters}');
-  } else if (!/^\d+$/.test(userId ?? '')) {
-    problems.push('X_ACCESS_TOKEN does not start with a numeric user id');
-  } else if (suffix.length !== X_CREDENTIAL_SHAPE.accessTokenSuffix) {
-    problems.push(
-      `X_ACCESS_TOKEN's suffix is ${suffix.length} characters; X issues ` +
-        `${X_CREDENTIAL_SHAPE.accessTokenSuffix}` +
-        (suffix.length < X_CREDENTIAL_SHAPE.accessTokenSuffix
-          ? ' — the token was copied short. Regenerate it in the X developer console ' +
-            '(Keys and tokens → Access Token and Secret) and copy the whole value.'
-          : ''),
-    );
+  if (present('X_ACCESS_TOKEN', credentials.accessToken)) {
+    const token = credentials.accessToken ?? '';
+    const [userId, ...rest] = token.split('-');
+    if (rest.length === 0) {
+      problems.push('X_ACCESS_TOKEN has no "-" — the form is {numeric user id}-{secret}');
+    } else if (!/^\d+$/.test(userId ?? '')) {
+      problems.push('X_ACCESS_TOKEN does not start with a numeric user id');
+    }
   }
 
   return problems;
@@ -282,17 +269,16 @@ export function deriveEffectiveModes(config: Config): EffectiveModes {
     });
   } else if (xMode === 'LIVE') {
     /**
-     * Present is not the same as valid.
+     * Present is not the same as valid — but "unfamiliar" is not the same as invalid.
      *
-     * Added 2026-08-14, from a live failure. All four X variables were set, so this
-     * function said LIVE, so the dashboard showed X as a working integration — and
-     * every request 401'd, because `X_ACCESS_TOKEN` had been copied ten characters
-     * short. "Four variables exist" was being treated as "the integration works".
+     * This branch used to degrade X to MOCK whenever the credential lengths differed
+     * from an undocumented rule I had inferred from a 2011 example. That rule was
+     * wrong (see `credentialShapeProblems`), and enforcing it made the dashboard
+     * report a credential problem that did not exist while hiding the one that did.
      *
-     * `ARCHITECTURE.md` §8 requires the badge to make degradation visible, and a badge
-     * that reads LIVE over an integration that cannot authenticate is the same false
-     * reassurance as a MOCK analysis rendered as real. Shape is checkable for free, so
-     * it is checked here rather than discovered by a metered request.
+     * Only structurally impossible values degrade the mode now. Whether the
+     * credentials actually authenticate is a question only the API can answer, and
+     * `pnpm x:verify` is where that answer is obtained — visibly, once, on purpose.
      */
     const shapeProblems = credentialShapeProblems({
       apiKey: config.X_API_KEY,

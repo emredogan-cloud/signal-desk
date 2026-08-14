@@ -257,30 +257,46 @@ describe('deriveEffectiveModes', () => {
     expect(isAnyModeMocked(allLive)).toBe(false);
   });
 
-  it('degrades X to MOCK when the credentials are present but malformed', () => {
+  it('does NOT degrade X for an unfamiliar credential length', () => {
     /**
-     * The live failure this encodes, 2026-08-14: all four X variables were set, so the
-     * system reported LIVE, so the dashboard showed a working integration — and every
-     * request 401'd, because the access token had been copied ten characters short.
-     * "Four variables exist" was standing in for "the integration works".
+     * The correction, encoded. This previously asserted that a 30-character
+     * access-token suffix degraded X to MOCK, on the strength of a length rule that X
+     * does not document and that the operator's own account contradicts.
+     *
+     * Isolating the OAuth legs settled it: `POST /oauth/request_token` signs with the
+     * consumer key/secret alone — no access token — and returns the same 401, while an
+     * app-only Bearer returns 403 "Unsupported Authentication". The access token was
+     * never the failing part; OAuth 1.0a user-context is not provisioned for the app.
+     * A length check could never have found that, and enforcing one reported a problem
+     * that did not exist while hiding the one that did.
      */
     const modes = deriveEffectiveModes(
       parseConfig({
         X_MODE: 'LIVE',
         X_API_KEY: 'k'.repeat(25),
         X_API_SECRET: 's'.repeat(50),
-        // 30-character suffix where X issues 40 — the real defect, exactly.
         X_ACCESS_TOKEN: `1749077286295326720-${'t'.repeat(30)}`,
         X_ACCESS_TOKEN_SECRET: 'x'.repeat(45),
       }),
     );
+    expect(modes.xMode).toBe('LIVE');
+  });
 
+  it('degrades X only when a credential is structurally impossible', () => {
+    const modes = deriveEffectiveModes(
+      parseConfig({
+        X_MODE: 'LIVE',
+        X_API_KEY: 'k'.repeat(25),
+        X_API_SECRET: 's'.repeat(50),
+        // No numeric user-id prefix — cannot be an X access token in any format.
+        X_ACCESS_TOKEN: 'not-a-token',
+        X_ACCESS_TOKEN_SECRET: 'x'.repeat(45),
+      }),
+    );
     expect(modes.xMode).toBe('MOCK');
-    const reason = modes.degradations.find((entry) => entry.subsystem === 'x')?.because ?? '';
-    expect(reason).toContain('malformed');
-    // The reason has to name the field and the fix, not merely report failure.
-    expect(reason).toContain('X_ACCESS_TOKEN');
-    expect(reason).toContain('30 characters');
+    expect(modes.degradations.find((e) => e.subsystem === 'x')?.because).toContain(
+      'numeric user id',
+    );
   });
 
   it('does not degrade X when every credential is correctly shaped', () => {

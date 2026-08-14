@@ -247,7 +247,7 @@ describe('budget enforcement', () => {
   });
 });
 
-describe('credentialShapeProblems', () => {
+describe('credentialShapeProblems — only what is structurally impossible', () => {
   const good: XCredentials = {
     apiKey: 'k'.repeat(25),
     apiSecret: 's'.repeat(50),
@@ -255,40 +255,56 @@ describe('credentialShapeProblems', () => {
     accessTokenSecret: 'x'.repeat(45),
   };
 
-  it('passes a correctly shaped set', () => {
+  it('passes a well-formed set', () => {
     expect(credentialShapeProblems(good)).toEqual([]);
   });
 
-  it('catches the truncated access token that cost six metered requests', () => {
-    // The real value: a 19-digit user id and a 30-character suffix. Every other field
-    // was correct, so nothing but the token length distinguished it from a live key.
-    const problems = credentialShapeProblems({
-      ...good,
-      accessToken: `1749077286295326720-${'t'.repeat(30)}`,
-    });
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain('suffix is 30 characters');
-    expect(problems[0]).toContain('copied short');
+  it('ACCEPTS a 30-character access-token suffix', () => {
+    // The correction. This was previously rejected as "a truncated paste" on the
+    // strength of a 2011 example in X's signature docs. X documents no length, the
+    // operator's account produces 30 consistently across regenerations, and isolating
+    // the OAuth legs proved the access token was never what failed: POST
+    // /oauth/request_token signs with the consumer key/secret ALONE and returns the
+    // same 401. A guess that blocks the call which would have corrected it is worse
+    // than no check at all.
+    expect(
+      credentialShapeProblems({ ...good, accessToken: `1749077286295326720-${'t'.repeat(30)}` }),
+    ).toEqual([]);
   });
 
-  it('names every wrong field rather than stopping at the first', () => {
+  it('accepts unfamiliar lengths on the other three fields', () => {
     expect(
       credentialShapeProblems({
-        apiKey: 'short',
-        apiSecret: 'short',
-        accessToken: 'nodash',
+        ...good,
+        apiKey: 'k'.repeat(30),
+        apiSecret: 's'.repeat(44),
+        accessTokenSecret: 'x'.repeat(51),
+      }),
+    ).toEqual([]);
+  });
+
+  it('still catches an empty credential', () => {
+    expect(credentialShapeProblems({ ...good, apiKey: '' })).toContain('X_API_KEY is empty');
+  });
+
+  it('still catches an access token with no user-id prefix', () => {
+    expect(credentialShapeProblems({ ...good, accessToken: 'nodash' })[0]).toContain('no "-"');
+    expect(credentialShapeProblems({ ...good, accessToken: `abc-${'t'.repeat(30)}` })[0]).toContain(
+      'numeric user id',
+    );
+  });
+
+  it('names every empty field rather than stopping at the first', () => {
+    expect(
+      credentialShapeProblems({
+        apiKey: '',
+        apiSecret: '',
+        accessToken: '',
         accessTokenSecret: '',
       }),
     ).toHaveLength(4);
   });
-
-  it('rejects an access token with no user id', () => {
-    expect(credentialShapeProblems({ ...good, accessToken: `abc-${'t'.repeat(40)}` })[0]).toContain(
-      'numeric user id',
-    );
-  });
 });
-
 describe('response handling', () => {
   it('surfaces rate-limit headers rather than swallowing them', async () => {
     const { spend } = account(1, 0);

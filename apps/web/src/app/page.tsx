@@ -1,8 +1,7 @@
 import { health, modes, schemaReady, stream, type StreamRow } from '@/lib/data';
 import { brief } from '@/lib/brief';
 import { serverConfig } from '@/lib/env';
-import { Rail } from '@/components/rail';
-import { EventCard } from '@/components/event-card';
+import { EventCard, relativeTime } from '@/components/event-card';
 import { Detail } from '@/components/detail';
 import { MockBadge } from '@/components/mock-badge';
 
@@ -97,6 +96,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   }
 
   const rows = stream(200);
+  // §25: the operator needs to know how fresh the picture is without hunting for it.
+  const freshest = rows.reduce<Date | undefined>(
+    (newest, row) => (newest === undefined || row.occurredAt > newest ? row.occurredAt : newest),
+    undefined,
+  );
   const ranked = rank(rows, tab);
   const selectedId = Number.isFinite(requested) && requested > 0 ? requested : ranked[0]?.eventId;
   const selected = selectedId === undefined ? undefined : brief(selectedId);
@@ -105,52 +109,51 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   return (
     <>
       <MockBadge modes={effective} />
-      <div className="shell">
-        <Rail
-          modes={effective}
-          health={systemHealth}
-          aiBudget={config.AI_DAILY_BUDGET_USD}
-          xBudget={config.X_DAILY_BUDGET_USD}
-          xSpend={0}
-          alerts={systemHealth.deadSources}
-        />
 
+      {/*
+        The whole of the old rail and KPI wall, reduced to one line.
+        §26 of the brief: the operator still wants ingest freshness, spend, source
+        health and integration state — but they must be SECONDARY. A status bar can be
+        read in a glance and ignored; a sidebar of panels cannot be ignored, which is
+        why it kept winning attention from the decision it was supposed to support.
+      */}
+      <div className="statusbar">
+        <span
+          className={`dot ${systemHealth.deadSources === 0 ? 'dot-ok' : 'dot-warn'}`}
+          aria-hidden="true"
+        />
+        <span>worker {systemHealth.deadSources === 0 ? 'sağlıklı' : 'kaynak sorunu'}</span>
+        <span className="sb-sep" aria-hidden="true">
+          ·
+        </span>
+        <span>
+          kaynak {systemHealth.sources.length - systemHealth.deadSources}/
+          {systemHealth.sources.length}
+        </span>
+        <span className="sb-sep" aria-hidden="true">
+          ·
+        </span>
+        <span>
+          AI ${systemHealth.costTodayUsd.toFixed(2)}/${config.AI_DAILY_BUDGET_USD.toFixed(2)}
+        </span>
+        <span className="sb-sep" aria-hidden="true">
+          ·
+        </span>
+        <span>X {effective.xMode === 'LIVE' ? 'canlı' : 'mock'}</span>
+        <span className="sb-sep" aria-hidden="true">
+          ·
+        </span>
+        <span>son olay {freshest === undefined ? '—' : relativeTime(freshest, now)}</span>
+      </div>
+
+      <div className="shell">
         <div className="centre">
           <header className="topbar">
             <div>
               <h1>Günün Özeti</h1>
               <div className="topbar-sub">
-                {now.toLocaleDateString('tr-TR', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                  weekday: 'long',
-                  timeZone: config.TZ,
-                })}
-              </div>
-            </div>
-
-            <div className="kpis">
-              <div className="kpi">
-                <div className="kpi-k">Toplam Olay</div>
-                <div className="kpi-v">{systemHealth.gate.total.toLocaleString('tr-TR')}</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-k">Kapıdan Geçen</div>
-                <div className="kpi-v">{systemHealth.gate.total - systemHealth.gate.killed}</div>
-                <div className="kpi-note">
-                  %{((1 - systemHealth.gate.killRate) * 100).toFixed(1)}
-                </div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-k">AI Çağrısı</div>
-                <div className="kpi-v">{systemHealth.callsToday}</div>
-                <div className="kpi-note">${systemHealth.costTodayUsd.toFixed(4)}</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-k">Sessiz Kaynak</div>
-                <div className="kpi-v">{systemHealth.deadSources}</div>
-                <div className="kpi-note">/ {systemHealth.sources.length}</div>
+                {ranked.length} olay · en yenisi{' '}
+                {freshest === undefined ? '—' : relativeTime(freshest, now)}
               </div>
             </div>
           </header>
@@ -189,43 +192,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
                   />
                 ))
             )}
-          </div>
-
-          <div className="strip">
-            <div className="strip-card">
-              <span className="strip-ic" aria-hidden="true">
-                ◷
-              </span>
-              <div>
-                <div className="strip-k">KURAL KAPISI</div>
-                <div className="strip-v">
-                  %{(systemHealth.gate.killRate * 100).toFixed(1)} eleme — pencere içi %
-                  {(systemHealth.gate.inWindowKillRate * 100).toFixed(1)}
-                </div>
-              </div>
-            </div>
-            <div className="strip-card">
-              <span className="strip-ic" aria-hidden="true">
-                ◔
-              </span>
-              <div>
-                <div className="strip-k">ÖNBELLEK</div>
-                <div className="strip-v">
-                  {systemHealth.cacheReadTokens.toLocaleString('tr-TR')} token okundu
-                </div>
-              </div>
-            </div>
-            <div className="strip-card">
-              <span className="strip-ic" aria-hidden="true">
-                ◈
-              </span>
-              <div>
-                <div className="strip-k">YAYINLAMA</div>
-                <div className="strip-v">
-                  {effective.postingEnabled ? 'Etkin' : 'Kapalı — her gönderi elle onaylanır'}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
