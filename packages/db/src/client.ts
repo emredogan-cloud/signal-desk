@@ -39,7 +39,13 @@ export function openDatabase(options: OpenDatabaseOptions): DatabaseHandle {
 
   const raw = new Database(path, { readonly: options.readonly ?? false });
 
-  if (path !== IN_MEMORY) {
+  // A reader sets neither. `journal_mode` is a WRITE to the database header, and
+  // issuing it from the dashboard while the worker holds the WAL is what made the
+  // deployed console take 32 seconds to render a page: four `openDatabase` calls per
+  // request, each contending for the header, each waiting out part of the 5-second
+  // `busy_timeout`. The pragmas below are the writer's business — `ARCHITECTURE.md` §7
+  // says one writer and one reader, and this is that sentence expressed in code.
+  if (path !== IN_MEMORY && options.readonly !== true) {
     // WAL survives across connections and only needs setting once, but setting it
     // every open is idempotent and removes an ordering dependency at startup.
     raw.pragma('journal_mode = WAL');

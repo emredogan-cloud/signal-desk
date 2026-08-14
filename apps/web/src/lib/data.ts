@@ -3,12 +3,12 @@ import {
   openDatabase,
   latestScores,
   analysisContextFor,
+  evidenceFactsFor,
   gateKillRate,
   spendSince,
   spendBreakdown,
   allTrends,
   observationsFor,
-  envelopeItemsFor,
   sourceHealthRows,
 } from '@signal-desk/db';
 import { deriveEffectiveModes } from '@signal-desk/shared';
@@ -71,7 +71,12 @@ export type StreamRow = {
  */
 function open() {
   const config = serverConfig();
-  const handle = openDatabase({ url: config.DATABASE_URL });
+  // **Read-only, deliberately.** `ARCHITECTURE.md` §7 grants the dashboard exactly one
+  // role — reader — and a read-only connection is that rule enforced by SQLite rather
+  // than by everyone remembering it. It also skips the `journal_mode` pragma, which is
+  // a write to the database header and, issued once per `open()` while the worker held
+  // the WAL, was most of the 32 seconds the deployed dashboard took to render.
+  const handle = openDatabase({ url: config.DATABASE_URL, readonly: true });
   return { handle, config };
 }
 
@@ -117,13 +122,15 @@ export function stream(limit = 40): StreamRow[] {
       // One query for the page. See `analysisContextFor` for the two-recommendations
       // bug that made this necessary: the list must reason from the same inputs the
       // detail panel does, or it quietly gives a less-informed verdict.
-      const context = analysisContextFor(
-        handle.db,
-        rows.map((row) => row.eventId),
-      );
+      const ids = rows.map((row) => row.eventId);
+      const context = analysisContextFor(handle.db, ids);
+      // Three aggregates in one query instead of a joined evidence fetch per row. The
+      // per-row version rendered the deployed dashboard in 32 seconds; see
+      // `evidenceFactsFor`.
+      const facts = evidenceFactsFor(handle.db, ids);
 
       return rows.map((row) => {
-        const items = envelopeItemsFor(handle.db, row.eventId);
+        const evidenceFacts = facts.get(row.eventId);
         const breakdown = row.breakdown as {
           brandRelevance?: { name: string; value: number }[];
         } | null;
@@ -138,12 +145,10 @@ export function stream(limit = 40): StreamRow[] {
           entities: row.entities,
           testable:
             testability > 0.5 || row.entities.some((e) => (TESTABLE_ENTITIES[e] ?? 0) >= 0.8),
-          hasVersionArtifact: items.some((i) => /v?\d+\.\d+|\bb\d{4,}\b/.test(i.title)),
-          hasOfficialSource: items.some((i) => i.isOfficial),
+          hasVersionArtifact: evidenceFacts?.hasVersionArtifact ?? false,
+          hasOfficialSource: evidenceFacts?.hasOfficialSource ?? false,
           distinctSourceCount: row.distinctSourceCount,
-          expertSourceCount: new Set(
-            items.filter((i) => i.sourceCategory === 'EXPERT_ANALYST').map((i) => i.sourceId),
-          ).size,
+          expertSourceCount: evidenceFacts?.expertSourceCount ?? 0,
           stillUnknown: context.get(row.eventId)?.stillUnknown ?? [],
           whatChanged: '',
           importance: row.importance,

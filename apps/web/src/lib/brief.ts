@@ -268,7 +268,7 @@ export function buildBrief(db: Db, eventId: number, now: Date): Brief | undefine
 /** Open, build one brief, close. The dashboard is one reader at one concurrent user. */
 export function brief(eventId: number): Brief | undefined {
   const config = serverConfig();
-  const handle = openDatabase({ url: config.DATABASE_URL });
+  const handle = openDatabase({ url: config.DATABASE_URL, readonly: true });
   try {
     return buildBrief(handle.db, eventId, new Date());
   } catch (error) {

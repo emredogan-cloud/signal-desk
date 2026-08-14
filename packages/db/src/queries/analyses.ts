@@ -1,7 +1,15 @@
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { ConfidenceLevel } from '@signal-desk/shared';
 import type { Db } from '../client.js';
-import { analyses, events, eventScores, spendLedger } from '../schema.js';
+import {
+  analyses,
+  evidence,
+  events,
+  eventScores,
+  rawItems,
+  sources,
+  spendLedger,
+} from '../schema.js';
 
 /**
  * Analysis persistence and the spend ledger.
@@ -251,6 +259,72 @@ export function envelopeItemsFor(
       isOfficial: row.isOfficial === 1,
       sourceCategory: row.sourceCategory,
     }));
+}
+
+/**
+ * The three evidence facts the ranked list needs, for many events, in ONE query.
+ *
+ * ### The defect this fixes — 2026-08-14
+ *
+ * The rebuilt list called `envelopeItemsFor` once per row to derive three booleans.
+ * Locally that was invisible; on the deployed 2-vCPU machine the dashboard took
+ * **32.2 seconds** to render — 200 joined queries pulling every evidence body, to
+ * compute "is any source official".
+ *
+ * This is the second time in one afternoon that a per-row query became the bottleneck
+ * (see `analysisContextFor`), and the shape of the mistake is the same both times: a
+ * function written for the *detail* view, reused in the *list* view where the row count
+ * is two orders of magnitude higher. The detail panel legitimately wants whole
+ * evidence items; the list wants three aggregates, and asking for the former to compute
+ * the latter is what costs thirty seconds.
+ *
+ * It also never reads `raw_items.body`, which is the large column — a list should not
+ * be paging article text through SQLite to decide how to sort itself.
+ */
+export function evidenceFactsFor(
+  db: Db,
+  eventIds: readonly number[],
+): Map<
+  number,
+  { hasOfficialSource: boolean; hasVersionArtifact: boolean; expertSourceCount: number }
+> {
+  const out = new Map<
+    number,
+    { hasOfficialSource: boolean; hasVersionArtifact: boolean; expertSourceCount: number }
+  >();
+  if (eventIds.length === 0) return out;
+
+  const rows = db
+    .select({
+      eventId: evidence.eventId,
+      official: sql<number>`max(${sources.isOfficial})`,
+      // SQLite has no REGEXP without an extension, so the version test is two GLOBs:
+      // "digit.digit" anywhere (v1.2, 16.3.1) or "b" followed by four digits (b10400).
+      // Deliberately looser than the JS regex it replaces — this only feeds a strategy
+      // input, and a false positive costs a slightly different angle, not a wrong fact.
+      versioned: sql<number>`max(
+        case when ${rawItems.title} glob '*[0-9].[0-9]*'
+               or ${rawItems.title} glob '*b[0-9][0-9][0-9][0-9]*'
+             then 1 else 0 end
+      )`,
+      experts: sql<number>`count(distinct case when ${sources.category} = 'EXPERT_ANALYST' then ${evidence.sourceId} end)`,
+    })
+    .from(evidence)
+    .innerJoin(rawItems, eq(rawItems.id, evidence.rawItemId))
+    .innerJoin(sources, eq(sources.id, evidence.sourceId))
+    .where(inArray(evidence.eventId, [...eventIds]))
+    .groupBy(evidence.eventId)
+    .all();
+
+  for (const row of rows) {
+    out.set(row.eventId, {
+      hasOfficialSource: row.official === 1,
+      hasVersionArtifact: row.versioned === 1,
+      expertSourceCount: row.experts,
+    });
+  }
+
+  return out;
 }
 
 export function eventForAnalysis(
