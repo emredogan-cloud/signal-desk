@@ -150,15 +150,46 @@ export function loadScorableEvents(db: Db, limit = 10_000, afterId = 0): Scorabl
  * Same class of mistake as the Phase 5 pipeline bug: a LIMIT read as a ceiling when
  * it is actually a truncation.
  */
+/**
+ * The latest score for each event, ranked.
+ *
+ * ### MEASURED — 2026-08-14 — why this is `in (select max(id) …)` and not a join
+ *
+ * This function used to join a `group by` sub-select as a derived table. On the
+ * deployed database it took **165 seconds** for the gate-filtered call, and 45ms for
+ * the unfiltered one — the same work, a thousandfold apart, because the two took
+ * different query plans.
+ *
+ * `explain query plan` on the join form:
+ *
+ *     SEARCH s USING INDEX event_scores_gate_idx (gate_passed=?)
+ *     SCAN l                      ← the whole grouped sub-select, per matching row
+ *
+ * `event_scores` is **append-only score history** by design (§7: "scores change as
+ * evidence accumulates; keep the series"), so it had grown to **169,178 rows for
+ * 5,372 events** — roughly thirty score rows per event after a month of pipeline
+ * cycles. Re-scanning that per gate survivor is where the time went, and it gets
+ * worse on every run.
+ *
+ * The `in (select …)` form materialises the sub-select **once** into an ephemeral
+ * list, then the outer query is an index lookup:
+ *
+ *     SEARCH s USING INDEX event_scores_gate_idx (gate_passed=? AND rowid=?)
+ *     LIST SUBQUERY 1
+ *       SCAN event_scores USING COVERING INDEX event_scores_event_idx
+ *
+ * Measured on the same database, same results, byte-identical: **161ms**.
+ *
+ * The lesson worth keeping is not "use IN". It is that this table grows without bound
+ * by design, so any query over it has to be checked against a database that has
+ * actually accumulated history — a local database a few hours old will take the fast
+ * plan and prove nothing.
+ */
 export function latestScores(db: Db, limit = 50, gatePassedOnly = false) {
-  const latest = db
-    .select({
-      eventId: eventScores.eventId,
-      maxId: sql<number>`max(${eventScores.id})`.as('max_id'),
-    })
+  const latestIds = db
+    .select({ maxId: sql<number>`max(${eventScores.id})` })
     .from(eventScores)
-    .groupBy(eventScores.eventId)
-    .as('latest');
+    .groupBy(eventScores.eventId);
 
   const rows = db
     .select({
@@ -182,9 +213,12 @@ export function latestScores(db: Db, limit = 50, gatePassedOnly = false) {
       scoredAt: eventScores.scoredAt,
     })
     .from(eventScores)
-    .innerJoin(latest, eq(latest.maxId, eventScores.id))
     .innerJoin(events, eq(events.id, eventScores.eventId))
-    .where(gatePassedOnly ? eq(eventScores.gatePassed, true) : undefined)
+    .where(
+      gatePassedOnly
+        ? and(inArray(eventScores.id, latestIds), eq(eventScores.gatePassed, true))
+        : inArray(eventScores.id, latestIds),
+    )
     .orderBy(desc(eventScores.combined))
     .limit(limit)
     .all();
