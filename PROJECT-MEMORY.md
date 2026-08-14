@@ -711,6 +711,83 @@ pnpm x:verify        pnpm backup           pnpm check:env
 
 ---
 
+## O3. DASHBOARD REBUILD — 2026-08-14
+
+The console was rebuilt from three operator-approved references (`dashboard/001.png`,
+`002.png`, `003(main).png`) into a **decision console**: rail / ranked feed / decision
+panel. Turkish UI; the X drafts stay English, because the sources and the audience are.
+
+### What each reference contributed
+
+|     |                                                                             |
+| --- | --------------------------------------------------------------------------- |
+| 001 | the persistent rail, the always-visible system-truth panel, the budget bars |
+| 002 | the master/detail workflow and the depth of the detail panel                |
+| 003 | card language, the compact KPI cluster, and the manual-approval note        |
+
+None of them was copied. 001's weakness was that a score donut and a latency chart held
+the best space on screen — data _about_ the system, where the decision should be.
+
+### Most of it was surfacing, not generating
+
+The analysis column already held what changed, before/after, per-audience implications,
+evidence-tagged claims and the do-not-say list. The strategy engine already produced
+why-now / why-me / what-can-I-add and five scored options. **None of it was being read.**
+
+Genuinely new, in `packages/core/src/publish/`:
+
+- **`composeDrafts`** — treats model output as UNTRUSTED, like a fetched RSS item. A
+  wrong value in `draftMaterial.hook` is a string the operator pastes onto his own
+  timeline, so the 280-char limit, the do-not-say filter and the removal of handles,
+  links, hashtags, bidi controls and emoji are enforced in code with tests, never
+  delegated to the prompt.
+- **`assessAttention`** — "viral potential" from a **closed enum** of properties of the
+  event. No `controversy_bait`, no `hot_take`. The verdict names which drivers fired, so
+  a HIGH the operator disagrees with is auditable rather than oracular.
+- **`planMedia`** — what / why / how / source / tool, and it refuses to recommend a
+  screen recording when there is nothing to run.
+
+### Seven defects, all found by running it
+
+1. **List and detail disagreed about the same event**, three centimetres apart. Not by
+   design: the list called `buildStrategy` with empty `stillUnknown`/`doNotSay` because
+   reading each analysis meant a query per row. Not a different opinion — an opinion
+   formed with less information than the system had.
+2. **Auth behaved differently on request 1 than request 2**, because `serverConfig()`
+   loaded the root `.env` lazily during the first render and mutated the env `proxy.ts`
+   reads. Now loaded once in `instrumentation.ts`, before traffic.
+3. **My own `draftMaterial` bounds discarded $0.3563 of completed Opus analysis** over a
+   250-character line. The `MAX_REASON_CHARS` lesson, paid for a second time.
+4. **The composer produced zero drafts when one input ran long.** "No draft available"
+   reads as a verdict, not a packing failure. It packs to fit now.
+5. **Two formats rendered byte-identical text under different headings.** A draft headed
+   "your own test" containing no test misdescribes itself.
+6. **`X_MODE=LIVE` with a malformed token still claimed a working integration.**
+   `deriveEffectiveModes` now degrades X to MOCK when the credentials are present but
+   cannot possibly authenticate, and the badge says which field and how to fix it.
+7. **`latestScores` took 165 SECONDS on the deployed database.** `event_scores` is
+   append-only score history by design and had reached **169,178 rows for 5,372
+   events**; the derived-table join re-scanned the grouped sub-select per gate survivor.
+   Rewritten as `in (select max(id) …)`: **161ms**, byte-identical output. The local
+   database took the fast plan and proved nothing — this table has to be profiled
+   against one that has actually accumulated history.
+
+### CSP
+
+The dashboard ships client JavaScript for the first time (copy-to-clipboard is the
+centre of the workflow). Rather than buy that with `'unsafe-inline'`, the policy moved
+to `proxy.ts` with a **per-request nonce** and `'strict-dynamic'`. `default-src` stays
+`'none'`; `connect-src` went `'none'` → `'self'` for RSC navigation. Verified in Chrome
+against production: hydration live, copy fires, and the fallback genuinely selects the
+draft rather than telling the operator to.
+
+### Still true
+
+Publishing is manual. There is no send button anywhere in the panel, and
+`packages/core/src/publish/confirm.ts` still owns the only authorisation path.
+
+---
+
 ## P. CONTINUATION PROTOCOL
 
 ```
