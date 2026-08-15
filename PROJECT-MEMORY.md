@@ -1,5 +1,46 @@
 # PROJECT-MEMORY.md
 
+> # ⛔ STATUS: FROZEN / SUSPENDED — 2026-08-15
+>
+> **Emergency hard freeze by operator directive. Zero-cost baseline. Do not restart
+> casually.**
+>
+> | | |
+> | --- | --- |
+> | **Fly machine** `185d617bd4ede8` | **stopped** — verified still stopped after 3 HTTP requests (`auto_start_machines = false`, so traffic cannot wake it) |
+> | **Compute / token / API spend** | **$0.00/hr** |
+> | **Residual cost** | **~$0.45/month** — the 3 GB volume `vol_491l9q9p2joopnzr`. Non-zero because deleting it would destroy the database this freeze exists to preserve. IPv4 is shared (free); the dedicated IPv6 is free. |
+> | `AI_MODE` | `MOCK` — local `.env` **and** `fly.toml` |
+> | `AI_DAILY_BUDGET_USD` | `0.00` → `budgetState()` returns `SUSPENDED` (`budget.ts:110`, `dailyBudgetUsd <= 0`), a hard refusal at the call site independent of `AI_MODE` |
+> | `X_MODE` / `X_ENABLE_POSTING` | `MOCK` / `false` |
+> | `ANTHROPIC_API_KEY` | **removed** from the Fly secret store; **blanked** in local `.env`. Preserved at `.env.backup-frozen-2026-08-15` (gitignored, mode 600) — the credential is not lost. |
+> | Local 24/7 worker | **killed** — pid 2379878, `DATA_MODE=LIVE`, had been running 1d 22h from an earlier session |
+>
+> ### ⚠️ Restarting: `fly deploy`, never a bare `fly machine start`
+>
+> The secret and `fly.toml` changes are **staged**, not deployed — deliberately, because
+> deploying onto a full volume was the larger risk. Machine version 14 still carries the
+> pre-freeze config, so `fly machine start` alone would resume **`AI_MODE=LIVE` with a
+> $2.00 budget**. `fly deploy` applies the frozen config first.
+>
+> ### ⚠️ Unresolved: the volume is 100% full
+>
+> `/data` is 2.9 G/2.9 G used. `signal-desk.db` reached **2,593 MB** with **0 MB of
+> reclaimable free pages** — the space is real data, not bloat, and it grew from a 30 MB
+> compacted backup on 08-14 to this in ~36 h while `raw_items` rose only 5,200 → 6,073.
+> Growth is therefore **not** in `raw_items`; append-only `event_scores` (169,178 rows
+> and re-scored every 20 min) is the prime suspect, unconfirmed.
+>
+> Consequences, all verified rather than assumed:
+> - `VACUUM INTO` backups now fail with `SQLITE_FULL`. **No new backup can be taken until space is freed.**
+> - `backups/signal-desk-2026-08-15T15-10-19-237Z.db` is a **corrupt partial** from that failed run (`quick_check` cannot open it: "attempt to write a readonly database"). Removing it would reclaim ~163 MB; the deletion was **blocked by a tool permission guard**, so it is still there and still useless.
+> - **Intact and verified `ok`:** the live `signal-desk.db`, and `backups/signal-desk-2026-08-14T03-09-16-666Z.db` (30 MB, `raw_items` 5,200) — the newest restorable snapshot.
+> - The WAL was **not** checkpointed: folding 14 MB of WAL into the main file needs free space the volume does not have. The `.db` + `-wal` + `-shm` set is internally consistent and recovers on next open.
+>
+> **Before any restart:** grow the volume (`flyctl volumes extend`) or prune score
+> history, then take a real backup. Diagnosis was deliberately left undone — this
+> directive forbade triage.
+
 **Operational handoff state. Refreshed every three completed phases.**
 Last written: **2026-08-13**, after Phase 3.
 

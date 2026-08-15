@@ -1,5 +1,33 @@
 # Validation report
 
+> ## ⛔ SYSTEM FROZEN / SUSPENDED — 2026-08-15
+>
+> Emergency hard freeze by operator directive. **Every measurement below was taken
+> against a running system and is now historical.** Nothing in this report is being
+> re-measured, because nothing is running.
+>
+> **Verified at freeze time (not asserted — each was checked):**
+>
+> | Check | Method | Result |
+> | --- | --- | --- |
+> | Machine stopped | `flyctl machine list` | `stopped` |
+> | Traffic cannot wake it | 3 × `curl https://signal-desk.fly.dev/` then re-check state | `HTTP 000` ×3, still `stopped` |
+> | Local worker killed | `SIGTERM` to pid 2379878, then `ps` | gone; no `signal-desk` node process remains |
+> | Effective AI mode | `node apps/worker/dist/cli/check-env.js` | `AI_MODE MOCK (canned analyses)` |
+> | Budget is a hard stop | read `packages/ai/src/budget.ts:110` | `dailyBudgetUsd <= 0 → 'SUSPENDED'` — `0.00` refuses, it does not mean "unlimited" |
+> | Key out of secret store | `flyctl secrets list` | `ANTHROPIC_API_KEY` absent |
+> | Key not lost | `.env.backup-frozen-2026-08-15`, mode 600, `git check-ignore` passes | preserved, unstageable |
+> | Database intact | `PRAGMA quick_check` on the volume | live DB `ok`; 08-14 backup `ok` |
+>
+> **Spend after freeze:** $0.00/hr compute, $0.00 tokens, $0.00 X API.
+> Residual **~$0.45/month** for the 3 GB volume, retained on purpose to preserve the
+> database. Reporting this as a literal $0.00 would be false.
+>
+> **Two things this freeze did not fix**, both recorded in `PROJECT-MEMORY.md`:
+> the `/data` volume is **100% full**, so no new backup can be taken (`SQLITE_FULL`);
+> and the machine's deployed config is still the pre-freeze one, so it must be restarted
+> with `fly deploy`, never a bare `fly machine start`.
+
 **Date:** 2026-08-13 · **Phases 1–15 built** · **1,000 tests** · **CI green**
 
 > **UPDATED 2026-08-13, later the same day: `ANTHROPIC_API_KEY` was configured and the

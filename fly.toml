@@ -16,8 +16,13 @@ primary_region = 'fra'
   # mounted here; the repository's relative `file:./data/...` default would land on the
   # container's ephemeral layer and be discarded on every deploy.
   DATABASE_URL = 'file:/data/signal-desk.db'
+  # FROZEN 2026-08-15 by operator directive (emergency hard freeze, zero-cost baseline).
+  # DATA_MODE stays LIVE because ingest is unmetered RSS/HTTP — it costs nothing and
+  # the machine is stopped anyway. AI_MODE is the one that spends, so it is MOCK.
+  # Undoing the freeze = AI_MODE back to LIVE, budgets back to 2.00/1.50, re-add the
+  # ANTHROPIC_API_KEY secret, deploy, then `flyctl machine start`.
   DATA_MODE = 'LIVE'
-  AI_MODE = 'LIVE'
+  AI_MODE = 'MOCK'
   # MOCK because OAuth 1.0a user-context is not provisioned for this app — verified by
   # isolating the legs: POST /oauth/request_token signs with the consumer key/secret
   # ALONE and still returns 401, while an app-only Bearer returns 403 "Unsupported
@@ -28,8 +33,10 @@ primary_region = 'fra'
   LOG_LEVEL = 'info'
   TZ = 'Europe/Istanbul'
   AI_ANALYSIS_THRESHOLD = '50'
-  AI_DAILY_BUDGET_USD = '2.00'
-  X_DAILY_BUDGET_USD = '1.50'
+  # Zeroed by the freeze. The budget guard refuses any call whose projected cost would
+  # exceed the ceiling, so 0.00 is a hard stop at the call site independent of AI_MODE.
+  AI_DAILY_BUDGET_USD = '0.00'
+  X_DAILY_BUDGET_USD = '0.00'
   PORT = '3000'
   # On the volume, not in the image. See packages/shared/src/repo-root.ts.
   MODEL_CACHE_DIR = '/data/.models'
