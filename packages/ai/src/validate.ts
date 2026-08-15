@@ -157,7 +157,23 @@ export function validateAnalysis(raw: unknown, context: ValidationContext): Anal
   // the figure was sourced, and the check was comparing presentation rather than
   // value. This preserves the security property exactly (an unsourced number still
   // fails) while removing a purely cosmetic mismatch that costs a paid analysis.
-  const digitsOf = (value: string): string => value.replace(/[,_\s]/g, '');
+  /**
+   * Normalise thousands separators on BOTH sides before comparing.
+   *
+   * ### A locale collision my own Turkish change introduced — 2026-08-15
+   *
+   * The narrative is now written in Turkish and the claims quote their (English)
+   * sources. Turkish writes one thousand five hundred as **1.500**; English writes
+   * **1,500**. The old normaliser stripped commas but treated the dot as significant,
+   * so the two spellings of the same sourced figure no longer matched and a correct,
+   * fully-sourced analysis was discarded (event 140, ~$0.11).
+   *
+   * A separator is a dot or comma followed by exactly three digits. A decimal point is
+   * left alone, so `2.5x` and `94.2%` still compare as themselves and an unsourced
+   * decimal is still caught.
+   */
+  const digitsOf = (value: string): string =>
+    value.replace(/[.,](?=\d{3}\b)/g, '').replace(/[_\s]/g, '');
   const claimDigits = digitsOf(claimText);
 
   for (const raw of narrative) {

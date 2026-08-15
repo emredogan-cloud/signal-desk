@@ -256,6 +256,41 @@ describe('provenance false positives that cost paid analyses — 2026-08-15', ()
     ).not.toThrow();
   });
 
+  it('accepts a Turkish-formatted figure against an English-formatted claim', () => {
+    // Turkish writes 1.500 where English writes 1,500. The narrative is Turkish and the
+    // claims quote English sources, so the same sourced number appeared in two
+    // spellings and a correct analysis was discarded (event 140).
+    expect(() =>
+      validateAnalysis(
+        analysis({
+          whatHappened: 'Ankette 1.500 kuruluş yer aldı.',
+          claims: [
+            {
+              text: 'The survey covered 1,500 organizations.',
+              evidenceIds: ['ev-1'],
+              tag: 'VERIFIED',
+            },
+          ],
+        }),
+        official,
+      ),
+    ).not.toThrow();
+  });
+
+  it('still distinguishes a decimal from a thousands separator', () => {
+    // 2.5 must not normalise to 25, or an unsourced 2.5x would pass against a claim
+    // mentioning 25.
+    expect(() =>
+      validateAnalysis(
+        analysis({
+          whatHappened: 'Throughput is 2.5x the previous build.',
+          claims: [{ text: 'The batch size is 25.', evidenceIds: ['ev-1'], tag: 'VERIFIED' }],
+        }),
+        official,
+      ),
+    ).toThrow(/no sourced claim/i);
+  });
+
   it('STILL fails on a genuinely unsourced measurement', () => {
     // The property that matters is unchanged: a magnitude claim with no evidence id
     // behind it is still refused.
