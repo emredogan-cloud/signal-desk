@@ -138,6 +138,23 @@ export function loadScorableEvents(db: Db, limit = 10_000, afterId = 0): Scorabl
 }
 
 /**
+ * The most recent combined score for one event, or `undefined`.
+ *
+ * For targeted re-analysis (`pnpm analyze --event=…`), which needs the score to decide
+ * the threshold branch but must not pull the whole ranked page to get it.
+ */
+export function latestCombinedFor(db: Db, eventId: number): number | undefined {
+  const row = db
+    .select({ combined: eventScores.combined })
+    .from(eventScores)
+    .where(eq(eventScores.eventId, eventId))
+    .orderBy(desc(eventScores.id))
+    .limit(1)
+    .get();
+  return row?.combined;
+}
+
+/**
  * The latest score per event, joined to the event. The dashboard's stream query.
  *
  * `gatePassedOnly` filters **in SQL**, before the LIMIT. An earlier version applied

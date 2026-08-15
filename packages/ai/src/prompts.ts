@@ -25,7 +25,7 @@ import { envelopeInstructions } from './envelope.js';
  */
 
 export const TRIAGE_PROMPT_VERSION = 'triage-v5-2026-08-14';
-export const ANALYSIS_PROMPT_VERSION = 'analysis-v7-2026-08-14';
+export const ANALYSIS_PROMPT_VERSION = 'analysis-v8-tr-2026-08-15';
 
 /**
  * The triage system prompt — the cached prefix for every Haiku call.

@@ -4,6 +4,7 @@ import {
   seedAll,
   MIGRATIONS_FOLDER,
   eventsAwaitingAnalysis,
+  latestCombinedFor,
   envelopeItemsFor,
   eventForAnalysis,
   insertAnalyses,
@@ -88,6 +89,36 @@ async function main(): Promise<number> {
   const limit = limitArg === undefined ? 50 : Number(limitArg.slice('--limit='.length));
   const reset = process.argv.includes('--reset');
 
+  /**
+   * `--event=1304,5424` — analyse exactly these, whatever the queue thinks.
+   *
+   * The normal queue skips anything already carrying a verdict under the current
+   * prompt version, which is correct for the scheduled pipeline and useless when an
+   * operator has looked at one event and wants it done again. Named events bypass the
+   * queue entirely; they do not bypass the budget.
+   */
+  const eventArg = process.argv.find((arg) => arg.startsWith('--event='));
+  const targetIds = eventArg
+    ? eventArg
+        .slice('--event='.length)
+        .split(',')
+        .map((raw) => Number(raw.trim()))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    : [];
+
+  /**
+   * `--force` — send to the expensive model even if triage says no.
+   *
+   * Only meaningful together with `--event`, and refused without it: forcing the whole
+   * queue would spend the day's budget on exactly the events triage was right about.
+   */
+  const force = process.argv.includes('--force');
+  if (force && targetIds.length === 0) {
+    console.error('\n--force requires --event=<id>. Forcing the whole queue would spend the');
+    console.error("day's budget on the events triage was correct to skip.\n");
+    return 1;
+  }
+
   let boot;
   try {
     boot = bootstrap({ loggerName: 'analyze' });
@@ -122,6 +153,7 @@ async function main(): Promise<number> {
       analysisModel: config.AI_ANALYSIS_MODEL,
       dailyBudgetUsd: config.AI_DAILY_BUDGET_USD,
       analysisThreshold: config.AI_ANALYSIS_THRESHOLD,
+      forceAnalysis: force,
     };
 
     console.log(`\nAI_MODE=${aiMode}`);
@@ -144,7 +176,21 @@ async function main(): Promise<number> {
       `  spent today: $${spent.toFixed(4)} — state ${budgetState(spent, engineConfig.dailyBudgetUsd)}\n`,
     );
 
-    const queue = eventsAwaitingAnalysis(handle.db, TRIAGE_PROMPT_VERSION, limit);
+    const queue =
+      targetIds.length > 0
+        ? targetIds.map((eventId) => ({
+            eventId,
+            combined: latestCombinedFor(handle.db, eventId) ?? 0,
+          }))
+        : eventsAwaitingAnalysis(handle.db, TRIAGE_PROMPT_VERSION, limit);
+
+    if (targetIds.length > 0) {
+      console.log(`  targeting event(s): ${targetIds.join(', ')}${force ? '  [FORCED]' : ''}`);
+      if (force) {
+        console.log('  --force: triage may still be right. Each forced analysis costs ~$0.11.');
+      }
+    }
+
     if (queue.length === 0) {
       console.log(
         'nothing to analyse: every gate survivor already has a verdict under this prompt version\n',

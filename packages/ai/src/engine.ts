@@ -51,6 +51,20 @@ export type EngineConfig = {
   readonly analysisModel: string;
   readonly dailyBudgetUsd: number;
   readonly analysisThreshold: number;
+  /**
+   * Send to the expensive model even when triage said not to.
+   *
+   * **Off by default and deliberately awkward to reach** — it is only set by an
+   * explicit `--force` on an explicitly named `--event`, never by the scheduled
+   * pipeline. Triage exists because it is right far more often than it is wrong: over
+   * 5,000 real events the rule gate plus triage cut the expensive tier to a handful,
+   * and that ratio is the difference between a $15/month tool and a $150/month one.
+   *
+   * The legitimate use is an operator who has looked at an event and disagrees with
+   * the verdict. `budgetExceeded` still applies — this overrides a judgement, never
+   * the spend ceiling.
+   */
+  readonly forceAnalysis?: boolean;
 };
 
 export type AnalysisInput = {
@@ -394,14 +408,14 @@ export async function analyseEvent(
       config.analysisModel,
       ANALYSIS_PROMPT_VERSION,
     );
-  } else if (!triage.value.worthDeepAnalysis) {
+  } else if (!triage.value.worthDeepAnalysis && config.forceAnalysis !== true) {
     analysis = skipped(
       'not_worth_it',
       `triage judged deep analysis unwarranted: ${triage.value.reason}`,
       config.analysisModel,
       ANALYSIS_PROMPT_VERSION,
     );
-  } else if (input.combinedScore < config.analysisThreshold) {
+  } else if (input.combinedScore < config.analysisThreshold && config.forceAnalysis !== true) {
     analysis = skipped(
       'below_threshold',
       `combined score ${String(input.combinedScore)} is below AI_ANALYSIS_THRESHOLD of ${String(config.analysisThreshold)}`,
