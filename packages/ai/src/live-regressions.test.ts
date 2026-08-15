@@ -226,3 +226,47 @@ describe('analysis output bounds accommodate a real Opus response', () => {
     expect(parsed.success).toBe(true);
   });
 });
+
+describe('provenance false positives that cost paid analyses — 2026-08-15', () => {
+  it('does not fail an analysis for citing an evidence id inline', () => {
+    // `ev-141` contains `141`. The check matched it and threw, so an analysis was
+    // discarded FOR CITING ITS SOURCE. Three live Opus calls died this way at ~$0.11
+    // each, and the text they discarded was correct.
+    expect(() =>
+      validateAnalysis(
+        analysis({
+          whatHappened: 'Vendor shipped a change, described in ev-141 and ev-143.',
+          claims: [],
+        }),
+        official,
+      ),
+    ).not.toThrow();
+  });
+
+  it('does not read a year in prose as an unsourced measurement', () => {
+    // The old exemption only fired when the field contained nothing but a year.
+    expect(() =>
+      validateAnalysis(
+        analysis({
+          whatHappened: 'The format has been stable since 1970 and changed today.',
+          claims: [],
+        }),
+        official,
+      ),
+    ).not.toThrow();
+  });
+
+  it('STILL fails on a genuinely unsourced measurement', () => {
+    // The property that matters is unchanged: a magnitude claim with no evidence id
+    // behind it is still refused.
+    expect(() =>
+      validateAnalysis(
+        analysis({
+          whatHappened: 'Throughput improved by 47% over the previous build.',
+          claims: [],
+        }),
+        official,
+      ),
+    ).toThrow(/no sourced claim/i);
+  });
+});

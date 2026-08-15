@@ -61,6 +61,20 @@ const NUMERIC_EXEMPT: readonly RegExp[] = [
   /^(?:[^\d]*\b(?:19|20)\d{2}\b[^\d]*)$/,
 ];
 
+/**
+ * Years, removed before the scan rather than exempted by whole-field match.
+ *
+ * The exemption above only fires when the field contains *nothing but* a year. A real
+ * narrative says "the format has been stable since 1970 and changed today", and 1970
+ * was then read as an unsourced measurement — costing a paid analysis for a sentence
+ * that asserted no magnitude at all.
+ *
+ * A four-digit 19xx/20xx is a date in every case this system encounters. If a genuine
+ * benchmark figure happens to be 2048, it will still be caught by the unit and
+ * separator branches of `FACTUAL_NUMBER` when written as a measurement ("2048 tokens").
+ */
+const YEAR = /\b(?:19|20)\d{2}\b/g;
+
 export function containsFactualNumber(text: string): boolean {
   if (NUMERIC_EXEMPT.some((pattern) => pattern.test(text))) return false;
   return FACTUAL_NUMBER.test(text);
@@ -116,7 +130,25 @@ export function validateAnalysis(raw: unknown, context: ValidationContext): Anal
   //
   // The narrative fields are where an unsourced figure does damage, because they are
   // what gets read and quoted. A number there must also appear in a claim.
-  const narrative = [analysis.whatHappened, analysis.whatChanged, analysis.before, analysis.after];
+  /**
+   * Strip evidence-id references before scanning.
+   *
+   * `ev-141` contains `141`, and `\b\d{2,}\b` matched it — so an analysis that cited its
+   * source *inline* failed the provenance check **for citing its source**. Three live
+   * Opus analyses were discarded this way on 2026-08-15 (events 138, 140 and one more)
+   * at roughly $0.11 each, and the discarded text was correct.
+   *
+   * The security property is untouched: an id is provenance, never a magnitude claim,
+   * so removing it cannot hide an unsourced benchmark figure.
+   */
+  const withoutEvidenceIds = (text: string): string => text.replace(/\bev-\d+\b/gi, '');
+
+  const narrative = [
+    analysis.whatHappened,
+    analysis.whatChanged,
+    analysis.before,
+    analysis.after,
+  ].map(withoutEvidenceIds);
   const claimText = analysis.claims.map((claim) => claim.text).join(' ');
 
   // Compare on DIGITS ONLY, so "27,674" in a claim satisfies "27674" in the narrative.
@@ -128,7 +160,8 @@ export function validateAnalysis(raw: unknown, context: ValidationContext): Anal
   const digitsOf = (value: string): string => value.replace(/[,_\s]/g, '');
   const claimDigits = digitsOf(claimText);
 
-  for (const field of narrative) {
+  for (const raw of narrative) {
+    const field = raw.replace(YEAR, '');
     if (!containsFactualNumber(field)) continue;
     const numbers = field.match(new RegExp(FACTUAL_NUMBER, 'gi')) ?? [];
     for (const number of numbers) {
